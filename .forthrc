@@ -1,0 +1,16 @@
+( .forthrc )
+( FORTH initialisation file, read at start-up [at end of COLD] )
+
+CASE-INSENSITIVE ( make Dictionary lookup be case-insensitive )
+
+( Load Utility words )
+?LOAD" utils.fth"
+[IF] ." Loaded utils.fth" CR [THEN]
+
+( Load Random Number words )
+?LOAD" random.fth"
+[IF] ." Loaded random.fth" CR [THEN]
+
+( Load Play words )
+?LOAD" play.fth"
+[IF] ." Loaded play.fth" CR [THEN]

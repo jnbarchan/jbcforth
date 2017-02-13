@@ -1,0 +1,54 @@
+# .gitignore: ignores for DISL (Qt) compilation sources
+
+# START copy from https://github.com/github/gitignore/blob/master/Qt.gitignore
+
+# C++ objects and libs
+
+*.slo
+*.lo
+*.o
+*.a
+*.la
+*.lai
+*.so
+*.dll
+*.dylib
+
+# Qt-es
+
+/.qmake.cache
+/.qmake.stash
+*.pro.user
+*.pro.user.*
+*.qbs.user
+*.qbs.user.*
+*.moc
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+Makefile*
+*build-*
+
+# QtCreator
+
+*.autosave
+
+#QtCtreator Qml
+*.qmlproject.user
+*.qmlproject.user.*
+
+# END copy from https://github.com/github/gitignore/blob/master/Qt.gitignore
+
+# jon: Extras/overrides
+
+# I find keeping the Qt-generated Makefile under control is useful (e.g. for comparison)
+!Makefile*
+
+# Temporary files from vi
+*.swp
+
+# Core dump file
+core
+
+# FORTH readline history file
+.forth_history
