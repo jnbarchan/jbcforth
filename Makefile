@@ -14,7 +14,7 @@ MAKEFILE      = Makefile
 CC            = gcc
 DEFINES       = -UNOREADLINE -UNOSEMAPHORE
 GCCFLAGS      = -std=gnu99 -Werror -Wreturn-type -Wunused-function -Wmissing-prototypes
-CFLAGS        = $(DEFINES) -m64 -pipe -g -fPIE $(GCCFLAGS) $(CDEBUGFLAGS)
+CFLAGS        = $(DEFINES) -m64 -pipe -g3 -fPIE $(GCCFLAGS) $(CDEBUGFLAGS)
 INCPATH       = -I.
 LINK          = gcc
 LFLAGS        = -m64

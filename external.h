@@ -18,8 +18,13 @@ extern void external_perror(const char *__s);
 extern void *external_malloc(size_t __size);
 extern void *external_calloc(size_t __nmemb, size_t __size);
 extern void *external_realloc (void *__ptr, size_t __size);
-extern void external_free (void *__ptr);
+extern void external_free(void *__ptr);
 extern char *external_strdup(const char *s);
+
+extern int external_fileno(FILE *stream);
+extern FILE *external_fopen(const char *path, const char *mode);
+extern int external_fclose(FILE *fp);
+extern int external_fflush(FILE *stream);
 
 extern void external_exit (int __status) __THROW __attribute__ ((__noreturn__));
 extern int external_isatty(int __fd);

@@ -12,11 +12,22 @@ FORTH DEFINITIONS
 : MACRO		( addr ... )
     \ Use as: " ..." MACRO CCCC
     <BUILDS
-      COUNT TEXT
+      $,
       IMMEDIATE
     DOES>
       $INTERPRET
   ;
+
+: :INLINE	( ... )
+    \ Use as: :INLINE ... ;INLINE
+    :NONAME
+  ;
+
+: ;INLINE	( xt ... )
+    \ Use as: :INLINE ... ;INLINE
+    [COMPILE] ;
+    DUP >R EXECUTE R> (FORGET)
+  ; IMMEDIATE
 
 \
 \ 1ARRAY stuff
@@ -48,9 +59,9 @@ FORTH DEFINITIONS
   ;
 : 1ARRAY-BINARY-SEARCH	( array\cmp\val ... &array[n]/0 )
     (LOCAL) val (LOCAL) cmp (LOCAL) array	( array\cmp\val ... )
-    0 0 array @EXECUTE 1ARRAY-COUNT	( 0\count )
+    0 0 array @EXECUTE 1ARRAY-COUNT 1-	( 0\count )
     BEGIN
-      2DUP <				( low\high\f )
+      2DUP 1+ <				( low\high\f )
     WHILE				( low < high )
       2DUP + 2/				( low\high\mid )
       DUP array @EXECUTE val @ SWAP cmp @EXECUTE	( val\&array[mid] ... <0/0/>0 )
@@ -77,7 +88,7 @@ FORTH DEFINITIONS
     INTERPRET" ASSIGN TRACE-EXECUTE TO-DO (TRACE-EXECUTE)"
     [COMPILE] FORTH
     " tests" CURRENT @ @ (FIND)
-    IF DROP DUP (FORGET) ." Reloading"
+    IF DROP DUP -FORGET ." Reloading"
     ELSE ." Loading"
     THEN ."  tests.fth" CR
     LOAD" tests.fth"

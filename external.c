@@ -56,6 +56,27 @@ extern char *external_strdup(const char *s)
 }
 
 
+extern int external_fileno(FILE *stream)
+{
+  return fileno(stream);
+}
+
+extern FILE *external_fopen(const char *path, const char *mode)
+{
+  return fopen(path, mode);
+}
+
+extern int external_fclose(FILE *fp)
+{
+  return fclose(fp);
+}
+
+extern int external_fflush(FILE *stream)
+{
+  return fflush(stream);
+}
+
+
 extern void external_exit(int __status)
 {
   exit(__status);

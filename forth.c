@@ -148,6 +148,7 @@ typedef enum primitive
   primitive_QUOTE,		// "
   primitive_DOLLAR_STORE,	// $!
   primitive_DOLLAR_PLUS,	// $+
+  primitive_DOLLAR_COMMA,	// $,
   primitive_DOLLAR_CONSTANT,	// $CONSTANT
   primitive_DOLLAR_INTERPRET,	// $INTERPRET
   primitive_DOLLAR_VARIABLE,	// $VARIABLE
@@ -197,6 +198,7 @@ typedef enum primitive
   primitive_COMMA,		// ,
   primitive_SUBTRACT,		// -
   primitive_DASH_FIND,		// -FIND
+  primitive_DASH_FORGET,	// -FORGET
   primitive_DASH_TRAILING,	// -TRAILING
   primitive_DOT,		// .
   primitive_DOT_QUOTE,		// ."
@@ -287,6 +289,7 @@ typedef enum primitive
   primitive_D_DOT,		// D.
   primitive_D_DOT_R,		// D.R
   primitive_D_LESS_THAN,	// D<
+  primitive_D_EQUALS,		// D=
   primitive_D_TO_R,		// D>R
   primitive_D_QUESTION_MARK,	// D?
   primitive_D_FETCH,		// D@
@@ -384,6 +387,7 @@ typedef enum primitive
   primitive_NFA,		// NFA
   primitive_NOOP,		// NOOP
   primitive_NOT,		// NOT
+  primitive_NOT_EQUALS,		// NOT=
   primitive_NOVEC,		// NOVEC
   vector_NUM,			// NUM
   primitive_NUMBER,		// NUMBER
@@ -750,10 +754,16 @@ const char *FORTH_ERR_MSG[] =
   "Definition Name Too Long",			/* err_DICT_NAME_LEN, */
   "Assertion Failure",				/* err_ASSERT_FAIL, */
 };
+
 static inline const char *forth_ERR_MSG(FORTH_ERR_NUM err)
   { return (err >= 0 && err < ELEMENTS_COUNT(FORTH_ERR_MSG)) ? FORTH_ERR_MSG[err] : "?"; }
 static const char *forth_ERR_FILE;
 static SINGLE forth_ERR_LINE;
+static void forth_SHOW_ERR_FILE_LINE(void)
+{
+  if (forth_ERR_FILE != NULL)
+    fprintf(stderr, " [%s:%d]", forth_ERR_FILE, forth_ERR_LINE);
+}
 
 // **************************************
 // ********** </ERROR NUMBERS> **********
@@ -1106,13 +1116,13 @@ static void forth_CR(void)
 }
 
 // NEXT_DIGIT
-static char forth_NEXT_DIGIT(BYTE base, UDOUBLE num)
+static char forth_NEXT_DIGIT(BYTE base, DOUBLE num, bool asUnsigned)
 {
   // return the the least-significant "digit" of a number in the specified base
   if (base < 2 || base > 16)
     forth_ERROR(err_BAD_PARAM);
-  num %= base;
-  char c = (num <= 9) ? '0' + num : 'A' + num - 10;
+  byte digit = asUnsigned ? ((UDOUBLE)num) % base : (num < 0 ? -num : num) % base;
+  char c = (digit <= 9) ? '0' + digit : 'A' + digit - 10;
   return c;
 }
 
@@ -1128,20 +1138,21 @@ static PFORTHSTRING forth_NUM_FORMAT(DOUBLE num, bool asUnsigned, byte base, byt
   *(--p) = '\0';
   if (trailingBlank)
     *(--p) = ' ';
+  UDOUBLE unum = (UDOUBLE)num;
   bool minus = FALSE;
   if (!asUnsigned && num < 0)
-  {
     minus = TRUE;
-    num = -num;
-  }
   byte count = 0;
   do
   {
-    char c = forth_NEXT_DIGIT(base, num);
+    char c = forth_NEXT_DIGIT(base, (asUnsigned ? unum : num), asUnsigned);
     *(--p) = c;
-    num /= base;
+    if (asUnsigned)
+      unum /= base;
+    else
+      num /= base;
     count++;
-  } while (num != 0);
+  } while ((asUnsigned ? unum : num) != 0);
   if (minus)
   {
     *(--p) = '-';
@@ -1328,7 +1339,7 @@ static bool forth_NUM(const PFORTHSTRING pWord)
   else // single precision
   {
     singlePrec = doublePrec;
-    if (singlePrec != doublePrec) // overflow
+    if (singlePrec != doublePrec && (doublePrec & 0xFFFF) != doublePrec) // overflow
       return FALSE;
     // push it to the stack
     SP_PUSH(singlePrec);
@@ -2253,7 +2264,7 @@ static PADDR forthAddBreakpoint(ADDR addr)
   if (count >= MAX_TRACE_EXECUTE_DICTENTS)
   {
     fprintf(stderr, "No more breakpoints");
-    fflush(stderr);
+    external_fflush(stderr);
     return NULL;
   }
   pADDRs[g_pTRACE_VARS->count_debug_dictents++] = addr;
@@ -2271,7 +2282,7 @@ static PADDR forthAddTracepoint(ADDR addr)
   if (count >= MAX_TRACE_EXECUTE_DICTENTS)
   {
     fprintf(stderr, "No more tracepoints");
-    fflush(stderr);
+    external_fflush(stderr);
     return NULL;
   }
   pADDRs[g_pTRACE_VARS->count_trace_dictents++] = addr;
@@ -2287,7 +2298,7 @@ static void forthDeleteBreakpoint(ADDR addr)
   if (pBreak == NULL)
   {
     fprintf(stderr, "Breakpoint not found");
-    fflush(stderr);
+    external_fflush(stderr);
     return;
   }
   memmove(pBreak, pBreak + 1, (count - ELEMENT_INDEX(pADDRs, pBreak + 1)) * sizeof(FORTHDICTENT));
@@ -2303,7 +2314,7 @@ static void forthDeleteTracepoint(ADDR addr)
   if (pTrace == NULL)
   {
     fprintf(stderr, "Tracepoint not found");
-    fflush(stderr);
+    external_fflush(stderr);
     return;
   }
   memmove(pTrace, pTrace + 1, (count - ELEMENT_INDEX(pADDRs, pTrace + 1)) * sizeof(FORTHDICTENT));
@@ -2419,7 +2430,7 @@ static void forthDecompileColonShowInstruction(PADDR *ppADDR, SINGLE colour)
   if (colour >= 0)
     readline_output_color_white(stdout);
 
-  fflush(stdout);
+  external_fflush(stdout);
 }
 
 // decompile a FORTHDICTENT
@@ -2632,14 +2643,13 @@ static void forth_FILE_IN_STRING(PFORTHSTRING pStr)
 {
   // Input Stream is coming from a string
   forthSetStringInput(pStr);
-  external_free((void *)forth_ERR_FILE);
   forth_SET_ERR_FILE_LINE(NULL, 0);
 }
 
 // FILE_IN_STDIN
 static void forth_FILE_IN_STDIN(void)
 {
-  if (external_isatty(fileno(stdin)))
+  if (external_isatty(external_fileno(stdin)))
   {
     // Input Stream is keyboard/Terminal Input Buffer
     forthSetKeyboardInput();
@@ -2649,7 +2659,6 @@ static void forth_FILE_IN_STDIN(void)
     // Input Stream is coming from a file
     forthSetFileInput(stdin, g_pMSB);
   }
-  external_free((void *)forth_ERR_FILE);
   forth_SET_ERR_FILE_LINE(NULL, 0);
 }
 
@@ -2661,8 +2670,8 @@ static bool forth_FILE_IN_OPEN(const char *pFilePath)
   // else returns FALSE
   if (pFilePath == NULL)
     forth_ERROR(err_SYS_MEM);
-  fflush(stdout);
-  FILE *fp = fopen(pFilePath, "r");
+  external_fflush(stdout);
+  FILE *fp = external_fopen(pFilePath, "r");
   if (fp == NULL)
     return FALSE;
   // Input Stream is coming from a file
@@ -2678,10 +2687,10 @@ static void forth_FILE_IN_CLOSE(void)
   // close the Input Stream file from file/string
   if (g_fspIN != NULL && g_fspIN != stdin)
   {
-    fflush(stdout);
+    external_fflush(stdout);
     if (forth_FILE_IN_IS_FILE())
     {
-      fclose(g_fspIN);
+      external_fclose(g_fspIN);
       external_free(pIBUF);
       pIBUF = NULL;
     }
@@ -2822,9 +2831,9 @@ static SINGLE forth_KEYBOARD_QUERY(const char *prompt, bool addHistory)
   if (pTIB == NULL || pIBUF != pTIB)
     forth_ERROR(err_SYS_MEM);
 
-  fflush(stdin);
-  fflush(stdout);
-  fflush(stderr);
+  external_fflush(stdin);
+  external_fflush(stdout);
+  external_fflush(stderr);
 
 #ifdef	SEMAPHORE
   forth_semacquire();
@@ -2845,7 +2854,7 @@ static SINGLE forth_KEYBOARD_QUERY(const char *prompt, bool addHistory)
 #else	// !READLINE
   if (prompt != NULL)
     fputs(prompt, stdout);
-  fflush(stdout);
+  external_fflush(stdout);
   in = fgets(pTIB, TERMINAL_INPUT_BUFFER_SIZE, stdin);
 #endif // READLINE
 
@@ -3157,6 +3166,7 @@ static void forthBootupDict(void)
   forthCreateDictEnt_primitive("0<", primitive_ZERO_LESS, 0);
   forthCreateDictEnt_primitive("0=", primitive_ZERO_EQUALS, 0);
   forthCreateDictEnt_primitive("NOT", primitive_NOT, 0);
+  forthCreateDictEnt_primitive("NOT=", primitive_NOT_EQUALS, 0);
   forthCreateDictEnt_primitive("0>", primitive_ZERO_GREATER, 0);
   forthCreateDictEnt_primitive("<", primitive_LESS_THAN, 0);
   forthCreateDictEnt_primitive("=", primitive_EQUALS, 0);
@@ -3164,9 +3174,6 @@ static void forthBootupDict(void)
   forthCreateDictEnt_primitive("U<", primitive_U_LESS_THAN, 0);
   forthCreateDictEnt_primitive("U>", primitive_U_GREATER_THAN, 0);
   forthCreateDictEnt_primitive("MAX", primitive_MAX, 0);
-  forthCreateDictEnt_primitive("MEMCMP", primitive_MEMCMP, 0);
-  forthCreateDictEnt_primitive("MEMDUMP", primitive_MEMDUMP, 0);
-  forthCreateDictEnt_primitive("MEMDUMPW", primitive_MEMDUMP_W, 0);
   forthCreateDictEnt_primitive("MIN", primitive_MIN, 0);
   forthCreateDictEnt_primitive("U*", primitive_U_TIMES, 0);
   forthCreateDictEnt_primitive("S->D", primitive_S_TO_D, 0);
@@ -3182,6 +3189,7 @@ static void forthBootupDict(void)
   forthCreateDictEnt_primitive("DABS", primitive_D_ABS, 0);
   forthCreateDictEnt_primitive("D+-", primitive_D_PLUS_MINUS, 0);
   forthCreateDictEnt_primitive("D<", primitive_D_LESS_THAN, 0);
+  forthCreateDictEnt_primitive("D=", primitive_D_EQUALS, 0);
   forthCreateDictEnt_primitive("F*", primitive_F_TIMES, 0);
   forthCreateDictEnt_primitive("F+", primitive_F_PLUS, 0);
   forthCreateDictEnt_primitive("F-", primitive_F_SUBTRACT, 0);
@@ -3228,6 +3236,9 @@ static void forthBootupDict(void)
   forthCreateDictEnt_primitive("FILL", primitive_FILL, 0);
   forthCreateDictEnt_primitive("ERASE", primitive_ERASE, 0);
   forthCreateDictEnt_primitive("BLANKS", primitive_BLANKS, 0);
+  forthCreateDictEnt_primitive("MEMCMP", primitive_MEMCMP, 0);
+  forthCreateDictEnt_primitive("MEMDUMP", primitive_MEMDUMP, 0);
+  forthCreateDictEnt_primitive("MEMDUMPW", primitive_MEMDUMP_W, 0);
   // ---------- Store/Fetch definitions
 
   // ++++++++++ String definitions
@@ -3240,6 +3251,7 @@ static void forthBootupDict(void)
   forthCreateDictEnt_primitive("($+)", primitive_BRACKET_DOLLAR_PLUS, 0);
   forthCreateDictEnt_primitive("$!", primitive_DOLLAR_STORE, 0);
   forthCreateDictEnt_primitive("$+", primitive_DOLLAR_PLUS, 0);
+  forthCreateDictEnt_primitive("$,", primitive_DOLLAR_COMMA, 0);
   // ---------- String definitions
 
   // ++++++++++ Output definitions
@@ -3349,6 +3361,7 @@ static void forthBootupDict(void)
   forthCreateDictEnt_primitive("FIND-VOCABULARY", primitive_FIND_VOCABULARY, 0);
   forthCreateDictEnt_primitive("PRUNE", primitive_PRUNE, 0);
   forthCreateDictEnt_primitive("(FORGET)", primitive_BRACKET_FORGET, 0);
+  forthCreateDictEnt_primitive("-FORGET", primitive_DASH_FORGET, 0);
   forthCreateDictEnt_primitive("FORGET", primitive_FORGET, 0);
   forthCreateDictEnt_primitive("HERE", primitive_HERE, 0);
   forthCreateDictEnt_primitive("ALLOT", primitive_ALLOT, 0);
@@ -3612,6 +3625,7 @@ static void prim_BRACKET_ASSERT(void)
   CALLER_ADVANCE(1);
   if (SP_POP() != 0)
     return;
+  external_fflush(stdout);
   fprintf(stderr, "Assert line #%hd: ", line);
   forth_ERROR(err_ASSERT_FAIL);
 }
@@ -3630,6 +3644,7 @@ static void prim_ASSERT(void)
   {
     if (SP_POP() != 0)
       return;
+    external_fflush(stdout);
     fprintf(stderr, "Assert line #%hd: ", forth_ERR_LINE);
     forth_ERROR(err_ASSERT_FAIL);
   }
@@ -4001,8 +4016,8 @@ static void prim_X_OR(void)
 static void prim_TOGGLE(void)
 {
   byte b = SP_POP();
-  ADDR addr = SP_POP_ADDR();
-  *(PBYTE)ADDR_TO_PTR(addr) &= ~b;
+  PBYTE pBYTE = SP_POP_PTR();
+  *pBYTE ^= b;
 }
 
 // 0<
@@ -4043,6 +4058,13 @@ static void prim_EQUALS(void)
   SP_REPLACE(*SP_0() == num2);
 }
 
+// NOT=
+static void prim_NOT_EQUALS(void)
+{
+  SINGLE num2 = SP_POP();
+  SP_REPLACE(*SP_0() != num2);
+}
+
 // >
 static void prim_GREATER_THAN(void)
 {
@@ -4070,31 +4092,6 @@ static void prim_MAX(void)
   SINGLE num2 = SP_POP();
   if (num2 > *SP_0())
     SP_REPLACE(num2);
-}
-
-// MEMCMP
-static void prim_MEMCMP(void)
-{
-  USINGLE num = SP_POP();
-  PBYTE pMem2 = SP_POP_PTR();
-  PBYTE pMem1 = SP_POP_PTR();
-  SP_PUSH(memcmp(pMem1, pMem2, num));
-}
-
-// MEMDUMP
-static void prim_MEMDUMP(void)
-{
-  SINGLE num = SP_POP();
-  ADDR addr = SP_POP_ADDR();
-  forthDumpMemBytes(addr, num);
-}
-
-// MEMDUMPW
-static void prim_MEMDUMP_W(void)
-{
-  SINGLE num = SP_POP();
-  ADDR addr = SP_POP_ADDR();
-  forthDumpMemWords(addr, num);
 }
 
 // MIN
@@ -4214,6 +4211,14 @@ static void prim_D_LESS_THAN(void)
   DOUBLE num2 = SP_POP_DOUBLE();
   DOUBLE num1 = SP_POP_DOUBLE();
   SP_PUSH(num1 < num2);
+}
+
+// D=
+static void prim_D_EQUALS(void)
+{
+  DOUBLE num2 = SP_POP_DOUBLE();
+  DOUBLE num1 = SP_POP_DOUBLE();
+  SP_PUSH(num1 == num2);
 }
 
 // F*
@@ -4591,6 +4596,31 @@ static void prim_BLANKS(void)
   prim_FILL();
 }
 
+// MEMCMP
+static void prim_MEMCMP(void)
+{
+  USINGLE num = SP_POP();
+  PBYTE pMem2 = SP_POP_PTR();
+  PBYTE pMem1 = SP_POP_PTR();
+  SP_PUSH(memcmp(pMem1, pMem2, num));
+}
+
+// MEMDUMP
+static void prim_MEMDUMP(void)
+{
+  SINGLE num = SP_POP();
+  ADDR addr = SP_POP_ADDR();
+  forthDumpMemBytes(addr, num);
+}
+
+// MEMDUMPW
+static void prim_MEMDUMP_W(void)
+{
+  SINGLE num = SP_POP();
+  ADDR addr = SP_POP_ADDR();
+  forthDumpMemWords(addr, num);
+}
+
 // ---------- Store/Fetch definitions
 
 // ++++++++++ String definitions
@@ -4716,6 +4746,13 @@ static void prim_DOLLAR_PLUS(void)
   memcpy(pStr->chars + pStr->len, pChars, count);
   pStr->len += count;
   pStr->chars[pStr->len] = '\0';
+}
+
+// $,
+static void prim_DOLLAR_COMMA(void)
+{
+  PFORTHSTRING pStr = SP_POP_PTR();
+  forthDictStoreForthString(pStr->len, pStr->chars);
 }
 
 // $!
@@ -4964,29 +5001,29 @@ static void prim_D_DOT_R(void)
 // .S
 static void prim_DOT_S(void)
 {
-  for (PSINGLE pSINGLE = (PSINGLE)pS0 - 1; pSINGLE >= (PSINGLE)pSP; pSINGLE--)
-    forth_NUM_OUTPUT(*pSINGLE, TRUE, g_bBASE, 0, '\0', TRUE);
+  for (PUSINGLE pUSINGLE = (PUSINGLE)pS0 - 1; pUSINGLE >= (PUSINGLE)pSP; pUSINGLE--)
+    forth_NUM_OUTPUT(*pUSINGLE, TRUE, g_bBASE, 0, '\0', TRUE);
 }
 
 // H.S
 static void prim_H_DOT_S(void)
 {
-  for (PSINGLE pSINGLE = (PSINGLE)pS0 - 1; pSINGLE >= (PSINGLE)pSP; pSINGLE--)
-    forth_NUM_OUTPUT(*pSINGLE, TRUE, 16, 0, '\0', TRUE);
+  for (PUSINGLE pUSINGLE = (PUSINGLE)pS0 - 1; pUSINGLE >= (PUSINGLE)pSP; pUSINGLE--)
+    forth_NUM_OUTPUT(*pUSINGLE, TRUE, 16, 0, '\0', TRUE);
 }
 
 // .RS
 static void prim_DOT_RS(void)
 {
-  for (PSINGLE pSINGLE = (PSINGLE)pR0 - 1; pSINGLE >= (PSINGLE)pRP; pSINGLE--)
-    forth_NUM_OUTPUT(*pSINGLE, TRUE, g_bBASE, 0, '\0', TRUE);
+  for (PUSINGLE pUSINGLE = (PUSINGLE)pR0 - 1; pUSINGLE >= (PUSINGLE)pRP; pUSINGLE--)
+    forth_NUM_OUTPUT(*pUSINGLE, TRUE, g_bBASE, 0, '\0', TRUE);
 }
 
 // H.RS
 static void prim_H_DOT_RS(void)
 {
-  for (PSINGLE pSINGLE = (PSINGLE)pR0 - 1; pSINGLE >= (PSINGLE)pRP; pSINGLE--)
-    forth_NUM_OUTPUT(*pSINGLE, TRUE, 16, 0, '\0', TRUE);
+  for (PUSINGLE pUSINGLE = (PUSINGLE)pR0 - 1; pUSINGLE >= (PUSINGLE)pRP; pUSINGLE--)
+    forth_NUM_OUTPUT(*pUSINGLE, TRUE, 16, 0, '\0', TRUE);
 }
 
 // ---------- Output definitions
@@ -5130,7 +5167,12 @@ static void prim_BRACKET_IF(void)
   } while (prim != primitive_BRACKET_ELSE && prim != primitive_BRACKET_THEN);
   // execute [ELSE]/[THEN]
   if (prim == primitive_BRACKET_ELSE)
-    prim_BRACKET_ELSE();
+  {
+    // push primitive_BRACKET_ELSE, for [THEN] to find
+    RP_REPLACE(primitive_BRACKET_ELSE);
+    // terminate (i.e. execute the following words)
+    return;
+  }
   else if (prim == primitive_BRACKET_THEN)
     prim_BRACKET_THEN();
 }
@@ -5831,6 +5873,15 @@ static void prim_PRUNE(void)
 // (FORGET)
 static void prim_BRACKET_FORGET(void)
 {
+  PFORTHDICTENT pDE = SP_POP_PTR();
+  if (pDE == NULL)
+    forth_ERROR(err_NOT_IN_CURRENT_VOCAB);
+  forthForgetDictEnt(pDE);
+}
+
+// -FORGET
+static void prim_DASH_FORGET(void)
+{
   PFORTHDICTENT pDEFrom = SP_POP_PTR();
   PFORTHSTRING pStr = SP_POP_PTR();
   PFORTHDICTENT pDE = forthFindDictEntFrom(pDEFrom, pStr->chars);
@@ -6295,7 +6346,7 @@ static void prim_EXIT(void)
   else
   {
     // terminate interpretation of current Input Stream
-    fclose(g_fspIN);
+    external_fclose(g_fspIN);
   }
 }
 
@@ -6355,7 +6406,7 @@ static void prim_BRACKET_TRACE_EXECUTE(void)
     fprintf(stdout, "%s-> ", pDE->nfa.name);
     fprintf(stdout, "\n");
   }
-  fflush(stdout);
+  external_fflush(stdout);
 }
 
 // (TRACE-EXECUTE-STACK)
@@ -6375,7 +6426,7 @@ static void prim_BRACKET_TRACE_EXECUTE_STACK(void)
     prim_H_DOT_S();
     fprintf(stdout, "\n");
   }
-  fflush(stdout);
+  external_fflush(stdout);
 }
 
 // TRACE-EXECUTE
@@ -6744,6 +6795,9 @@ static void forth_EXECUTE_PRIMITIVE(primitive_t prim)
   case primitive_DOLLAR_PLUS:		// $+
     prim_DOLLAR_PLUS(); break;
 
+  case primitive_DOLLAR_COMMA:		// $,
+    prim_DOLLAR_COMMA(); break;
+
   case primitive_DOLLAR_CONSTANT:	// $CONSTANT
     prim_DOLLAR_CONSTANT(); break;
 
@@ -6890,6 +6944,9 @@ static void forth_EXECUTE_PRIMITIVE(primitive_t prim)
 
   case primitive_DASH_FIND:		// -FIND
     prim_DASH_FIND(); break;
+
+  case primitive_DASH_FORGET:		// -FORGET
+    prim_DASH_FORGET(); break;
 
   case primitive_DASH_TRAILING:		// -TRAILING
     prim_DASH_TRAILING(); break;
@@ -7151,6 +7208,9 @@ static void forth_EXECUTE_PRIMITIVE(primitive_t prim)
 
   case primitive_D_LESS_THAN:		// D<
     prim_D_LESS_THAN(); break;
+
+  case primitive_D_EQUALS:		// D=
+    prim_D_EQUALS(); break;
 
   case primitive_D_TO_R:		// D>R
     prim_D_TO_R(); break;
@@ -7451,6 +7511,9 @@ static void forth_EXECUTE_PRIMITIVE(primitive_t prim)
 
   case primitive_NOT:			// NOT
     prim_NOT(); break;
+
+  case primitive_NOT_EQUALS:		// NOT=
+    prim_NOT_EQUALS(); break;
 
   case primitive_NOVEC:			// NOVEC
     prim_NOVEC(); break;
@@ -7893,11 +7956,11 @@ static void forth_DEBUG_EXECUTE_DICTENT(const PADDR pADDR, bool *pDebug_suspend_
     }
   }
   // verify input/output is Terminal
-  if (!external_isatty(fileno(stdin)) || !external_isatty(fileno(stdout)))
+  if (!external_isatty(external_fileno(stdin)) || !external_isatty(external_fileno(stdout)))
     forth_ERROR(err_BAD_PARAM);
   // output the Colon Definition, highlighting the execution point
   forthDecompileDictEnt(pDEColon, pADDR);
-  fflush(stdout);
+  external_fflush(stdout);
 
   do
   {
@@ -7932,7 +7995,7 @@ static void forth_DEBUG_EXECUTE_DICTENT(const PADDR pADDR, bool *pDebug_suspend_
     case 'l':			// List
       // list Breakpoints
       forthListBreakpoints();
-      fflush(stderr);
+      external_fflush(stderr);
       break;
     case 'n':			// Next
       // Step Over without Debug
@@ -7965,7 +8028,7 @@ static void forth_DEBUG_EXECUTE_DICTENT(const PADDR pADDR, bool *pDebug_suspend_
       break;
     default:
       fprintf(stderr, "? [b,c,l,n,o,q,s,t,u]");
-      fflush(stderr);
+      external_fflush(stderr);
       break;
     }
   } while (TRUE);
@@ -8326,8 +8389,7 @@ static void forth_MSG_HASH(FORTH_ERR_NUM err)
       fprintf(stderr, "? %s ", pNFA->name);
     fprintf(stderr, "MSG # %d", err);
     fprintf(stderr, " (%s)", forth_ERR_MSG(err));
-    if (forth_ERR_FILE != NULL)
-      fprintf(stderr, " [%s:%d]", forth_ERR_FILE, forth_ERR_LINE);
+    forth_SHOW_ERR_FILE_LINE();
     fprintf(stderr, "\n");
   }
 }
@@ -8353,7 +8415,7 @@ static void forth_OS_ERROR(void)
   bool isWarning = FALSE;
 
   // flush any pending output, before error message
-  fflush(stdout);
+  external_fflush(stdout);
 
   if (g_bExitOnError)
     fprintf(stderr, "\nEXIT ");
@@ -8365,8 +8427,7 @@ static void forth_OS_ERROR(void)
       fprintf(stderr, "? %s ", pNFA->name);
   }
   fprintf(stderr, "OS ERROR # %d ", external_errno());
-  if (forth_ERR_FILE != NULL)
-    fprintf(stderr, " [%s:%d]", forth_ERR_FILE, forth_ERR_LINE);
+  forth_SHOW_ERR_FILE_LINE();
   external_perror(NULL);
   if (g_bExitOnError)
   {
@@ -8402,7 +8463,7 @@ static void forth_ERROR(FORTH_ERR_NUM err)
   bool isWarning = (err == err_NOT_UNIQUE);
 
   // flush any pending output, before error message
-  fflush(stdout);
+  external_fflush(stdout);
 
   // if the flag g_bExitOnError is set
   // --- which is set during COLD and during forth_ERROR, and cleared when the top-level interpreter is reached ---
@@ -8411,8 +8472,7 @@ static void forth_ERROR(FORTH_ERR_NUM err)
   {
     fprintf(stderr, "\nEXIT ERROR # %d", err);
     fprintf(stderr, " (%s)", forth_ERR_MSG(err));
-    if (forth_ERR_FILE != NULL)
-      fprintf(stderr, " [%s:%d]", forth_ERR_FILE, forth_ERR_LINE);
+    forth_SHOW_ERR_FILE_LINE();
     fprintf(stderr, "\n");
     // exit with error
     external_exit(1);
@@ -8447,9 +8507,9 @@ static void forth_ERROR(FORTH_ERR_NUM err)
 static void forth_MESSAGE_WORD_NOT_FOUND(PFORTHSTRING pWord)
 {
   // when a word is not found, output the word and a "?"
-  fflush(stdout);
+  external_fflush(stdout);
   fprintf(stderr, "%.*s ?\n", pWord->len, pWord->chars);
-  fflush(stderr);
+  external_fflush(stderr);
 }
 
 // ERROR_WORD_NOT_FOUND
