@@ -446,6 +446,8 @@ typedef enum primitive
   primitive_U_TIMES,		// U*
   primitive_U_TO_D,		// U->D
   primitive_U_DOT,		// U.
+  primitive_U_DIVIDE,		// U/
+  primitive_U_DIVIDE_MOD,	// U/MOD
   primitive_U_LESS_THAN,	// U<
   primitive_U_GREATER_THAN,	// U>
   primitive_U_D_DOT,		// UD.
@@ -2423,6 +2425,8 @@ static void forthDecompileColonShowInstruction(PADDR *ppADDR, SINGLE colour)
       pADDR += sizeof(FORTHVOCAB) / sizeof(ADDR);
     }
       break;
+    default:
+      break;
     }
   *ppADDR = pADDR;
 
@@ -3190,6 +3194,8 @@ static void forthBootupDict(void)
   forthCreateDictEnt_primitive("D+-", primitive_D_PLUS_MINUS, 0);
   forthCreateDictEnt_primitive("D<", primitive_D_LESS_THAN, 0);
   forthCreateDictEnt_primitive("D=", primitive_D_EQUALS, 0);
+  forthCreateDictEnt_primitive("U/", primitive_U_DIVIDE, 0);
+  forthCreateDictEnt_primitive("U/MOD", primitive_U_DIVIDE_MOD, 0);
   forthCreateDictEnt_primitive("F*", primitive_F_TIMES, 0);
   forthCreateDictEnt_primitive("F+", primitive_F_PLUS, 0);
   forthCreateDictEnt_primitive("F-", primitive_F_SUBTRACT, 0);
@@ -4219,6 +4225,26 @@ static void prim_D_EQUALS(void)
   DOUBLE num2 = SP_POP_DOUBLE();
   DOUBLE num1 = SP_POP_DOUBLE();
   SP_PUSH(num1 == num2);
+}
+
+// U/
+static void prim_U_DIVIDE(void)
+{
+  USINGLE num2 = SP_POP();
+  UDOUBLE num1 = SP_POP_DOUBLE();
+  SP_PUSH((USINGLE)(num1 % num2));
+  SP_PUSH((USINGLE)(num1 / num2));
+}
+
+// U/MOD
+static void prim_U_DIVIDE_MOD(void)
+{
+  USINGLE num2 = SP_POP();
+  if (num2 == 0)
+    forth_ERROR(err_DIV_0);
+  UDOUBLE num1 = SP_POP_DOUBLE();
+  SP_PUSH((USINGLE)(num1 % num2));
+  SP_PUSH((USINGLE)(num1 / num2));
 }
 
 // F*
@@ -7682,6 +7708,12 @@ static void forth_EXECUTE_PRIMITIVE(primitive_t prim)
 
   case primitive_U_DOT:			// U.
     prim_U_DOT(); break;
+
+  case primitive_U_DIVIDE:		// U/
+    prim_U_DIVIDE(); break;
+
+  case primitive_U_DIVIDE_MOD:		// U/MOD
+    prim_U_DIVIDE_MOD(); break;
 
   case primitive_U_LESS_THAN:		// U<
     prim_U_LESS_THAN(); break;

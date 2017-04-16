@@ -256,6 +256,9 @@ extern char *readline_getline(const char *prompt, bool addHistory)
     // free the last line read
     free(last_line);
     last_line = NULL;
+    // check if stdin previously closed
+    if (stdin == NULL || fileno(stdin) < 0)
+      return NULL;
     // get a new line (malloc()ed)
     last_line = readline(prompt);
     if (last_line == NULL)
