@@ -137,6 +137,14 @@ T{ \ }T
 }T
 
 \
+\ Test dictionary allocation primitives
+\
+T{ DP @ HERE ( -> ) = ASSERT }T
+T{ HERE CREATE temp1 FORGET temp1 HERE ( -> ) = ASSERT }T
+T{ HERE CREATE temp1 HERE FORGET temp1 ( -> ) = NOT ASSERT }T
+T{ CREATE temp1 HERE 5 ALLOT HERE ( -> ) SWAP 5 + = ASSERT FORGET temp1 }T
+
+\
 \ Test :NONAME
 \
 VARIABLE nn1
@@ -186,15 +194,21 @@ T{ 1 -1 1 -1 ( -> ) > ASSERT U< ASSERT }T
 T{ 0 -2 -1 * - 1 * 2 * ( -> ) -4 = ASSERT }T
 T{ 0 1- 2- 2* 1+ 2+ BL + 1+ 2/ ( -> ) 15 = ASSERT }T
 T{ 16 3 ( -> ) 2DUP / 5 = ASSERT 2DUP MOD 1 = ASSERT /MOD 5 = ASSERT 1 = ASSERT }T
+T{ 5. 16. 3. -1. ( -> ) D- D+ D* 2DUP 100. D= ASSERT 4. D/ 25. D= ASSERT }T
 T{ 5 -2 -7 3 ( -> ) NEGATE -3 = ASSERT ABS 7 = ASSERT +- -5 = ASSERT }T
+T{ 5. -2 -7. 3. ( -> ) DNEGATE -3. D= ASSERT DABS 7. D= ASSERT D+- -5. D= ASSERT }T
 T{ -2 2 2DUP ( -> ) MAX 2 = ASSERT MIN -2 = ASSERT }T
 T{ 30000 DUP DUP DUP DUP DUP ( -> ) * / -5 = ASSERT */ 30000 = ASSERT }T
 T{ 30000 DUP 70 ( -> ) */MOD 12086 = ASSERT 60 = ASSERT }T
+T{ 60000. -70. ( -> ) D/MOD -857. D= ASSERT 10. D= ASSERT }T
+T{ 9. 8. 9. 10. ( -> ) D< ASSERT D< NOT ASSERT }T
 T{ 5 6 2DUP 2DUP ( -> ) AND 4 = ASSERT OR 7 = ASSERT XOR 3 = ASSERT }T
 CREATE temp1 9 C, T{ ( -> ) temp1 7 TOGGLE temp1 C@ 14 = ASSERT }T FORGET temp1
 VARIABLE temp1 T{ 9 temp1 ! ( -> ) temp1 1+! 5 temp1 +! temp1 @ 15 = ASSERT }T FORGET temp1
 T{ PI ( -> ) F->SF SF->F 3.14159265359 F->SF SF->F F= ASSERT }T
 T{ PI FDUP F->D 2DUP D->S ( -> ) 3 = ASSERT 3. D= ASSERT PI F= ASSERT }T
+T{ 1.1 2.2 F+ -3.3 F- 2.0 F* 0.5 F/ FDUP FDROP ( -> ) 26.4 F= ASSERT }T
+T{ 26.4 FDUP ( -> ) 26.40001 F< ASSERT 26.39999 F< NOT ASSERT }T
 T{ 7 DUP S->D 2DUP D->F ( -> ) 7.0 F= ASSERT 7. D= ASSERT 7 = ASSERT }T
 T{ -1 S->D -1 U->D ( -> ) 65535. D= ASSERT -1. D= ASSERT }T
 T{ -1 -1 U* 10 U/MOD ( -> ) 26214 = ASSERT 5 = ASSERT }T
@@ -269,6 +283,7 @@ T{ ( -> ) ?EXEC }T
 : temp1 ?COMP DROP 77 ; IMMEDIATE T{ ( -> ) 88 : temp2 temp1 ; 77 = ASSERT }T FORGET temp1
 T{ 7 7 ( -> ) ?PAIRS }T
 T{ : temp1 ?CSP ; ( -> ) temp1 }T FORGET temp1
+T{ ( -> ) ." Expect a message on next line..." CR }T
 T{ ( -> ) 10 MESSAGE }T
 T{ ( -> ) 0 10 ?ERROR }T
 
@@ -304,6 +319,20 @@ T{ :INLINE 3 0 DO I DUP 1 = IF LEAVE I THEN LOOP ;INLINE ( -> ) 1 = ASSERT 1 = A
 T{ :INLINE 3 BEGIN 1- ?DUP WHILE DUP REPEAT ;INLINE ( -> ) 1 = ASSERT 2 = ASSERT }T
 T{ :INLINE 3 BEGIN 1- DUP ?DUP 0= UNTIL ;INLINE ( -> ) 0 = ASSERT 1 = ASSERT 2 = ASSERT }T
 T{ :INLINE 3 BEGIN 1- DUP ?DUP 0= IF EXIT THEN AGAIN ;INLINE ( -> ) 0 = ASSERT 1 = ASSERT 2 = ASSERT }T
+
+\
+\ Test memory fill stuff
+\
+CREATE temp1 5 ALLOT
+CREATE temp2 5 ALLOT
+T{ temp1 5 123 FILL ( -> ) :INLINE 5 0 DO temp1 I + C@ 123 = ASSERT LOOP ;INLINE }T
+T{ temp1 5 123 FILL temp2 5 123 FILL ( -> ) temp1 temp2 5 MEMCMP 0= ASSERT }T
+T{ temp1 5 ERASE temp2 5 0 FILL ( -> ) temp1 temp2 5 MEMCMP 0= ASSERT }T
+T{ temp1 5 BLANKS temp2 5 BL FILL ( -> ) temp1 temp2 5 MEMCMP 0= ASSERT }T
+T{ temp1 5 123 FILL temp2 5 ERASE temp1 temp2 5 CMOVE ( -> ) temp1 temp2 5 MEMCMP 0= ASSERT temp2 C@ 123 = ASSERT }T
+T{ temp1 5 123 FILL temp2 5 ERASE temp1 temp2 2 MOVE ( -> ) temp1 temp2 4 MEMCMP 0= ASSERT temp2 5 + C@ 0 = ASSERT }T
+FORGET temp2
+FORGET temp1
 
 \
 \ All done!

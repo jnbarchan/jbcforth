@@ -4265,7 +4265,7 @@ static void prim_F_PLUS(void)
 static void prim_F_SUBTRACT(void)
 {
   FLOAT num2 = SP_POP_FLOAT();
-  SP_REPLACE_FLOAT(*SP_FLOAT_0() + num2);
+  SP_REPLACE_FLOAT(*SP_FLOAT_0() - num2);
 }
 
 // F/
