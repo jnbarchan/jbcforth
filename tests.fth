@@ -94,7 +94,7 @@ INIT-TC-ARRAY
   ;
 
 : TC-EXECUTE		( xt\f ... )
-    \ The word called during execution once ASSIGN TRACE-EXECUTE TO-DO TC-EXECUTE has been executed )
+    \ The word called during execution once ASSIGN TRACE-EXECUTE TO-DO TC-EXECUTE has been executed
     \ xt is the word being executed
     \ This is called twice:
     \ f=0 => pre-execution of word
@@ -103,6 +103,12 @@ INIT-TC-ARRAY
     \ TC-ARRAY-FIND-SEQUENTIAL		( find the execution token in TC-ARRAY )
     TC-ARRAY-FIND-BINARY		( find the execution token in TC-ARRAY )
     ?DUP IF 2+ 1+! THEN			( increment number of times called )
+  ;
+
+: TC-PRETEND-EXECUTE	( xt ... )
+    \ Pretend to TC-EXECUTE the xt word
+    \ Used to mark certain words as executed when we cannot really execute them/don't want to see them in 0 TC-SHOW
+    0 TC-EXECUTE
   ;
 
 \ Start of a Test
@@ -137,12 +143,57 @@ T{ \ }T
 }T
 
 \
+\ Test CLS and start nice and fesh!
+\
+T{ CLS }T
+T{ NOOP }T
+
+\
+\ Test case sensitivity
+\
+T{ CASE-INSENSITIVE }T
+T{ Case-Sensitive }T
+T{ CASE-INSENSITIVE }T
+
+\
+\ Test understanding of layout of dictionary entries
+\
+T{ ' ' ( -> ) DUP NFA PFA = ASSERT }T
+T{ ' ' ( -> ) DUP NFA 36 + = ASSERT }T
+T{ ' ' ( -> ) DUP LFA 4 + = ASSERT }T
+T{ ' ' ( -> ) DUP CFA 2 + = ASSERT }T
+
+\
+\ Test INITVECS initial vectored words
+\
+T{ ' ABORT ( -> ) @ ' (ABORT) NFA = ASSERT }T
+T{ ' CREATE ( -> ) @ ' (CREATE) NFA = ASSERT }T
+T{ ' EMIT ( -> ) @ ' (EMIT) NFA = ASSERT }T
+T{ ' EMITS ( -> ) @ ' (EMITS) NFA = ASSERT }T
+T{ ' KEY ( -> ) @ ' (KEY) NFA = ASSERT }T
+T{ ' MESSAGE ( -> ) @ ' MSG# NFA = ASSERT }T
+T{ ' NUM ( -> ) @ ' (NUM) NFA = ASSERT }T
+\ ' TRACE-EXECUTE ( -> ) @ ' (TRACE-EXECUTE) NFA = ASSERT
+T{ ' TRACE-EXECUTE ( -> ) @ ' TC-EXECUTE NFA = ASSERT }T
+
+\
 \ Test dictionary allocation primitives
 \
 T{ DP @ HERE ( -> ) = ASSERT }T
 T{ HERE CREATE temp1 FORGET temp1 HERE ( -> ) = ASSERT }T
 T{ HERE CREATE temp1 HERE FORGET temp1 ( -> ) = NOT ASSERT }T
 T{ CREATE temp1 HERE 5 ALLOT HERE ( -> ) SWAP 5 + = ASSERT FORGET temp1 }T
+T{ CREATE temp1 temp1 NFA LAST ( -> ) = ASSERT FORGET temp1 }T
+
+\
+\ Test finding dictionary entries
+\
+\ T{ " (FIND)" CONTEXT @ @ (FIND) ( -> ) ASSERT 6 = ASSERT ' (FIND) NFA = ASSERT }T
+T{ " -FIND" CONTEXT @ @ (FIND) ( -> ) ASSERT 5 = ASSERT ' -FIND NFA = ASSERT }T
+T{ CONTEXT @ @ -FIND -FIND ( -> ) ASSERT 5 = ASSERT ' -FIND NFA = ASSERT }T
+T{ FIND FIND ( -> ) ' FIND NFA = ASSERT }T
+
+\ crapola
 
 \
 \ Test :NONAME
@@ -158,6 +209,11 @@ T{ nn2 @EXECUTE ( -> ) 9876 = ASSERT }T
 \ Test :INLINE
 \
 T{ DP @ :INLINE DUP DP @ < ASSERT ;INLINE ( -> ) DP @ = ASSERT }T
+
+\
+\ Test: MACRO
+\
+T{ " 1234 2*" MACRO temp1 ( -> ) temp1 2468 = ASSERT }T FORGET temp1
 
 \
 \ Test literals stuff
@@ -213,6 +269,22 @@ T{ 7 DUP S->D 2DUP D->F ( -> ) 7.0 F= ASSERT 7. D= ASSERT 7 = ASSERT }T
 T{ -1 S->D -1 U->D ( -> ) 65535. D= ASSERT -1. D= ASSERT }T
 T{ -1 -1 U* 10 U/MOD ( -> ) 26214 = ASSERT 5 = ASSERT }T
 T{ -1 -1 U* 10 U/ ( -> ) 26214 = ASSERT 5 = ASSERT }T
+T{ 50 10 DIGIT 66 10 DIGIT ( -> ) NOT ASSERT ASSERT 2 = ASSERT }T
+T{ 50 16 DIGIT 66 16 DIGIT ( -> ) ASSERT 11 = ASSERT ASSERT 2 = ASSERT }T
+T{ " -123" NUM " -123" NUMBER ( -> ) -123 = ASSERT -123 = ASSERT }T
+T{ " -12345." NUM " -12345." NUMBER ( -> ) -12345. D= ASSERT -12345. D= ASSERT }T
+T{ " -12345.6" NUM " -12345.6" NUMBER ( -> ) -12345.6 F= ASSERT -12345.6 F= ASSERT }T
+T{ " 0xAB" NUM " 0xAB" NUMBER ( -> ) 171 = ASSERT 171 = ASSERT }T
+T{ " 0xABZ" NUM " 12A34" NUM " 1234 " NUM ( -> ) T{DEPTH 0= ASSERT }T
+T{ DECIMAL 30 ( -> ) HEX 1E DECIMAL = ASSERT }T
+T{ HEX 1E ( -> ) DECIMAL 30 = ASSERT }T
+
+\
+\ Test defining dictionary entries
+\
+T{ : temp1 1234 ; temp1 ( -> ) 1234 = ASSERT }T FORGET temp1
+T{ R: temp1 DUP IF 1- temp1 THEN R; 4 temp1 ( -> ) 0= ASSERT }T FORGET temp1
+T{ : temp1 [ SMUDGE ] DUP IF 1- temp1 THEN [ SMUDGE ] ; 4 temp1 ( -> ) 0= ASSERT }T FORGET temp1
 
 \
 \ Test Vocabulary stuff
@@ -265,8 +337,6 @@ T{DEPTH 16 = ASSERT
   ;INLINE
 }T
 
-T{ NOOP }T
-
 T{
 FIRST LIMIT 0 +ORIGIN
 ( -> )
@@ -276,8 +346,23 @@ T{DEPTH 3 = ASSERT
   ;INLINE
 }T
 
+T{ 0x30 USER temp1 temp1 ( -> ) ASSERT }T FORGET temp1
+
 \
-\ Message/Error stuff
+\ Test EXVEC: execution-vectored words
+\
+T{
+EXVEC: temp1
+' temp1 ( -> ) @ ' NOVEC NFA = ASSERT
+ASSIGN temp1 TO-DO NOOP
+' temp1 ( -> ) @ ' NOOP NFA = ASSERT
+temp1
+' temp1 NFA ' NOVEC NFA DOVEC ' temp1 ( -> ) @ ' NOVEC NFA = ASSERT
+FORGET temp1
+}T
+
+\
+\ Test Message/Error stuff
 \
 T{ ( -> ) ?EXEC }T
 : temp1 ?COMP DROP 77 ; IMMEDIATE T{ ( -> ) 88 : temp2 temp1 ; 77 = ASSERT }T FORGET temp1
@@ -310,6 +395,8 @@ T{ 9 DUP ( -> ) [IF] 9 = ASSERT [ELSE] 0 ASSERT [THEN] }T
 T{ 9 DUP ( -> ) NOT [IF] 0 ASSERT [ELSE] 9 = ASSERT [THEN] }T
 T{ 9 DUP ( -> ) :INLINE IF 9 = ASSERT ELSE 0 ASSERT THEN ;INLINE }T
 T{ 9 DUP ( -> ) :INLINE NOT IF 0 ASSERT ELSE 9 = ASSERT THEN ;INLINE }T
+T{ : temp1 [ HERE ] [ 16 ALLOT ] [ HERE (JUMP) ] [ 2 ALLOT ] ; ( -> ) ' temp1 16 + @ -16 2/ = ASSERT  }T FORGET temp1
+T{ : temp1 [ HERE ] [ 16 ALLOT ] [ HERE >R BACK HERE R> - 2 = ASSERT ] ; ( -> ) ' temp1 16 + @ -16 2/ = ASSERT  }T FORGET temp1
 T{ :INLINE 3 0 DO I LOOP ;INLINE ( -> ) 2 = ASSERT 1 = ASSERT 0 = ASSERT }T
 T{ :INLINE 0xFFFF 0xFFFC DO I ULOOP ;INLINE ( -> ) 0xFFFE = ASSERT 0xFFFD = ASSERT 0xFFFC = ASSERT }T
 T{ :INLINE 6 0 DO I 2 +LOOP ;INLINE ( -> ) 4 = ASSERT 2 = ASSERT 0 = ASSERT }T
@@ -333,6 +420,96 @@ T{ temp1 5 123 FILL temp2 5 ERASE temp1 temp2 5 CMOVE ( -> ) temp1 temp2 5 MEMCM
 T{ temp1 5 123 FILL temp2 5 ERASE temp1 temp2 2 MOVE ( -> ) temp1 temp2 4 MEMCMP 0= ASSERT temp2 5 + C@ 0 = ASSERT }T
 FORGET temp2
 FORGET temp1
+
+\
+\ Test Text strings stuff
+\
+T{ " Hello" ( -> ) DUP COUNT 5 = ASSERT DROP C@ 5 = ASSERT }T
+T{ " Hello" ( -> ) COUNT 5 = ASSERT DUP C@ 72 = ASSERT 4 + C@ 111 = ASSERT }T
+T{ : temp1 " Hello" " Hello" ; ( -> ) temp1 6 MEMCMP 0= ASSERT temp1 >R COUNT DROP R> COUNT MEMCMP 0= ASSERT }T FORGET temp1
+T{ : temp1 " HelloX" " HelloYY" ; ( -> ) temp1 >R COUNT DROP R> COUNT DROP 5 MEMCMP 0= ASSERT }T FORGET temp1
+T{ : temp1 " HelloX" " HelloYY" ; ( -> ) temp1 >R COUNT DROP R> COUNT DROP 6 MEMCMP 0= NOT ASSERT }T FORGET temp1
+T{ : temp1 " Hello world   " ; ( -> ) temp1 COUNT DUP 14 = ASSERT -TRAILING 11 = ASSERT DROP }T FORGET temp1
+T{ : temp1 " Hello world" ; ( -> ) temp1 COUNT TYPE CR }T FORGET temp1
+T{ : temp1 ." Hello world" ; ( -> ) temp1 CR }T FORGET temp1
+\ T{ : temp1 [COMPILE] (.") [ BL (WORD) Hello TEXT ] ; ( -> ) temp1 CR }T FORGET temp1
+T{ " Hello" COUNT $CONSTANT temp1 ( -> ) " Hello" COUNT DROP temp1 COUNT MEMCMP 0= ASSERT }T FORGET temp1
+T{ 10 $VARIABLE temp1 ( -> ) temp1 COUNT 0= ASSERT DROP }T FORGET temp1
+T{ 10 $VARIABLE temp1 ( -> ) " Hello" COUNT temp1 $! temp1 COUNT 5 = ASSERT DROP }T FORGET temp1
+T{ 10 $VARIABLE temp1 ( -> ) " Hello" COUNT temp1 $! " Bye" COUNT temp1 $+ temp1 COUNT 8 = ASSERT DROP }T FORGET temp1
+T{ 10 $VARIABLE temp1 ( -> ) " Hello" COUNT temp1 ($!) " Bye" COUNT temp1 ($+) temp1 COUNT 8 = ASSERT DROP }T FORGET temp1
+T{ CREATE temp1 HERE " Hello" COUNT TEXT 6 ALLOT ( -> ) " Hello" 6 MEMCMP 0= ASSERT }T FORGET temp1
+T{ 32 4HEX ( -> ) 4 = ASSERT " 0020" COUNT MEMCMP 0= ASSERT }T
+
+\
+\ Test OS stuff
+\
+T{ : temp1 " ls >/dev/null" COUNT 2DUP + 0 SWAP C! DROP OSCLI ; ( -> ) temp1 }T FORGET temp1
+T{ : temp1 [ " ls  >/dev/null" COUNT 2DUP + 0 SWAP C! ] >CLI ; ( -> ) temp1 }T FORGET temp1
+T{ OS' ls >/dev/null' }T
+T{ : temp1 OS' ls >/dev/null ' ; ( -> ) temp1 }T FORGET temp1
+T{ OS-PID ( -> ) OR ASSERT }T
+
+\
+\ Test LOAD file stuff
+\
+T{ ?LOAD" non-existent.fth" ( -> ) NOT ASSERT }T
+\ T{ ?LOAD" non-existent.fth" ( -> ) NOT ASSERT OSERROR }T
+T{ ?LOAD" empty.fth" ( -> ) ASSERT }T
+T{ : temp1 ?LOAD" empty.fth" ; ( -> ) temp1 ASSERT }T FORGET temp1
+T{ : temp1 ?LOAD" non-existent.fth" ; ( -> ) temp1 NOT ASSERT }T FORGET temp1
+T{ LOAD" empty.fth" ( -> ) }T
+T{ : temp1 LOAD" empty.fth" ; ( -> ) temp1 }T FORGET temp1
+
+\
+\ Test output stuff
+\
+T{ ( -> ) ." Expect some output on next lines..." CR }T
+T{ 16 >R H.RS .RS R> DROP ( -> ) }T
+T{ 16 H.S .S DROP ( -> ) }T
+T{ 16 4 .R 166661. 10 D.R ( -> ) }T CR
+T{ 65 C. 123456. DH. 123.456 F->SF SF. 123456.789 F. -123456. UD. 123456. D. ' A. A. 21 B. 1234 H. 1234 DEC. -1234 U. 1234 . ( -> ) }T CR
+CREATE temp1 8 ALLOT
+T{ 65 temp1 C! temp1 C? ( -> ) }T
+T{ 123456. temp1 D! temp1 DH? temp1 D? ( -> ) }T
+T{ 123456.78 temp1 F! temp1 F? ( -> ) }T
+T{ ' A? temp1 ! temp1 A? ( -> ) }T
+T{ 0x1234 temp1 ! temp1 H? temp1 ? ( -> ) }T
+FORGET temp1 CR
+T{ ' ID. NFA ID. ( -> ) }T
+T{ SPACE 8 SPACES }T CR
+T{ 65 EMIT }T
+T{ " Hello" COUNT EMITS }T CR
+
+\
+\ Test sundry stuff
+\
+T{ TIME ( -> ) TIME D- -1 D+- 2DUP 0. D= >R 1. D= R> OR ASSERT  }T
+T{ MICRO-TIME ( -> ) 2DROP }T
+
+\
+\ "Pretend" to execute those words which we cannot actually test/execute
+\ so that they do not show as not tested in 0 TC-SHOW
+\
+
+' RUN-TESTS NFA TC-PRETEND-EXECUTE
+
+' OS-FORK NFA TC-PRETEND-EXECUTE
+
+' DECOMPILE NFA TC-PRETEND-EXECUTE
+' DEBUGOFF NFA TC-PRETEND-EXECUTE
+' DEBUGON NFA TC-PRETEND-EXECUTE
+' UNBREAK NFA TC-PRETEND-EXECUTE
+' BREAK NFA TC-PRETEND-EXECUTE
+' LIST-BREAK NFA TC-PRETEND-EXECUTE
+' TRACEOFF NFA TC-PRETEND-EXECUTE
+' TRACEON NFA TC-PRETEND-EXECUTE
+' TRACE-COLONS NFA TC-PRETEND-EXECUTE
+' UNTRACE NFA TC-PRETEND-EXECUTE
+' TRACE NFA TC-PRETEND-EXECUTE
+' TRACE-EXECUTE NFA TC-PRETEND-EXECUTE
+' (TRACE-EXECUTE-STACK) NFA TC-PRETEND-EXECUTE
+' (TRACE-EXECUTE) NFA TC-PRETEND-EXECUTE
 
 \
 \ All done!

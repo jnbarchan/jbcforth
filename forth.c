@@ -60,13 +60,13 @@ typedef struct forthstring
 {
   byte len;
   char chars[0];
-} FORTHSTRING, *PFORTHSTRING;
+} __attribute__((packed)) FORTHSTRING, *PFORTHSTRING;
 
 typedef struct forthmaxlenstring
 {
   byte maxlen;
   FORTHSTRING string;
-} FORTHMAXLENSTRING, *PFORTHMAXLENSTRING;
+} __attribute__((packed)) FORTHMAXLENSTRING, *PFORTHMAXLENSTRING;
 
 // ************************************
 // ********** </FORTH TYPES> **********
@@ -85,7 +85,7 @@ typedef struct forthvocab
 {
   ADDR top_dictent;
   ADDR voc_link;
-} FORTHVOCAB, *PFORTHVOCAB;
+} __attribute__((packed)) FORTHVOCAB, *PFORTHVOCAB;
 
 // structure
 //   byte:       flag           \ 3bit flags + length of word's name
@@ -116,7 +116,7 @@ typedef struct nfa
 {
   FORTHDICTFLAG flag;
   FORTHDICTNAME name;
-} NFA, *PNFA;			// name field address
+} __attribute__((packed)) NFA, *PNFA;			// name field address
 
 typedef addr_t LFA, *PLFA;	// link field address
 #define INVALID_LFA ((LFA)(0))
@@ -470,7 +470,7 @@ typedef enum primitive
   primitive_BRACKET_THEN,	// [THEN]
   primitive_BACKSLASH,		// \ (backslash)
   primitive_RIGHT_BRACKET,	// ]
-} __attribute__((packed)) __attribute__ ((aligned (2))) primitive_t;
+} __attribute__((packed)) primitive_t;
 
 typedef union pfa		// parameter field address
 {
@@ -492,7 +492,7 @@ struct forthdictent	// FORTH dictionary entry
   LFA lfa;		// link field address (2 bytes)
   CFA cfa;		// code field address (2 bytes)
   PFA pfa;		// parameter field address (0..?? bytes)
-};
+} __attribute__((packed)) __attribute__ ((aligned (2)));
 // compile-time error if struct forthdictent is not size expected
 BUILD_BUG_ON(sizeof(struct forthdictent) != 36);
 // convert DP to LFA
@@ -502,19 +502,19 @@ BUILD_BUG_ON(sizeof(struct forthdictent) != 36);
 // convert DP to previous DP (via LFA)
 #define DP_TO_PREV_DP(dp) (LFA_TO_DP((dp)->lfa))
 // convert PFA to CFA
-#define PFA_TO_CFA(PFA) (ADDR)((PFA) - sizeof(CFA))
+#define PFA_TO_CFA(pfa) (ADDR)((pfa) - sizeof(CFA))
 // convert PPFA to PCFA
 #define PPFA_TO_PCFA(pPFA) (PCFA)PFA_TO_CFA((PBYTE)pPFA)
 // convert PFA to LFA
-#define PFA_TO_LFA(PFA) (ADDR)((PFA) - sizeof(CFA) - sizeof(LFA))
+#define PFA_TO_LFA(pfa) (ADDR)((pfa) - sizeof(CFA) - sizeof(LFA))
 // convert PPFA to PLFA
 #define PPFA_TO_PLFA(pPFA) (PNFA)PFA_TO_NFA((PBYTE)pPFA)
 // convert PFA to NFA
-#define PFA_TO_NFA(PFA) (ADDR)((PFA) - sizeof(CFA) - sizeof(LFA) - sizeof(NFA))
+#define PFA_TO_NFA(pfa) (ADDR)((pfa) - sizeof(CFA) - sizeof(LFA) - sizeof(NFA))
 // convert PPFA to PNFA
 #define PPFA_TO_PNFA(pPFA) (PNFA)PFA_TO_NFA((PBYTE)pPFA)
 // convert NFA to PFA
-#define NFA_TO_PFA(NFA) (ADDR)(NFA + sizeof(NFA) + sizeof(LFA) + sizeof(CFA))
+#define NFA_TO_PFA(nfa) (ADDR)((nfa) + sizeof(NFA) + sizeof(LFA) + sizeof(CFA))
 // convert PNFA to PPFA
 #define PNFA_TO_PPFA(pNFA) (PPFA)NFA_TO_PFA((PBYTE)pNFA)
 
@@ -1301,7 +1301,7 @@ static bool forth_NUM(const PFORTHSTRING pWord)
   {
     dot = TRUE;
     c = chars[++reached];
-    if (c >= '0' && c <= '9')
+    if (reached < len && c >= '0' && c <= '9')
     {
       decimal = TRUE;
       int dpl = 1;
@@ -4722,8 +4722,8 @@ static void prim_DASH_TRAILING(void)
   SINGLE num = *SP_0();
   if (num < 0)
     forth_ERROR(err_BAD_PARAM);
-  PFORTHSTRING pStr = ADDR_TO_PTR(*SP_1());
-  while (num > 0 && isspace(pStr->chars[num - 1]))
+  const char *pChars = ADDR_TO_PTR(*SP_1());
+  while (num > 0 && isspace(pChars[num - 1]))
     num--;
   SP_REPLACE(num);
 }
@@ -4763,15 +4763,13 @@ static void prim_BRACKET_DOLLAR_STORE(void)
 // $+
 static void prim_DOLLAR_PLUS(void)
 {
-  PFORTHSTRING pStr = SP_POP_PTR();
+  CHECK_SP_HAS_2();
+  PFORTHSTRING pStr = ADDR_TO_PTR(*SP_0());
   PFORTHMAXLENSTRING pMLStr = (PFORTHMAXLENSTRING)(((PBYTE)pStr) - 1);
-  BYTE count = SP_POP();
-  char *pChars = SP_POP_PTR();
+  BYTE count = *SP_1();
   if (pStr->len + count > pMLStr->maxlen)
     forth_ERROR(err_BAD_PARAM);
-  memcpy(pStr->chars + pStr->len, pChars, count);
-  pStr->len += count;
-  pStr->chars[pStr->len] = '\0';
+  prim_BRACKET_DOLLAR_PLUS();
 }
 
 // $,
@@ -4784,15 +4782,13 @@ static void prim_DOLLAR_COMMA(void)
 // $!
 static void prim_DOLLAR_STORE(void)
 {
-  PFORTHSTRING pStr = SP_POP_PTR();
+  CHECK_SP_HAS_2();
+  PFORTHSTRING pStr = ADDR_TO_PTR(*SP_0());
   PFORTHMAXLENSTRING pMLStr = (PFORTHMAXLENSTRING)(((PBYTE)pStr) - 1);
-  BYTE count = SP_POP();
-  char *pChars = SP_POP_PTR();
+  BYTE count = *SP_1();
   if (count > pMLStr->maxlen)
     forth_ERROR(err_BAD_PARAM);
-  memcpy(pStr->chars, pChars, count);
-  pStr->len = count;
-  pStr->chars[pStr->len] = '\0';
+  prim_BRACKET_DOLLAR_STORE();
 }
 
 // ---------- String definitions
@@ -5841,6 +5837,7 @@ static void prim_BRACKET_FIND(void)
 {
   PFORTHDICTENT pDEFrom = SP_POP_PTR();
   PFORTHSTRING pStr = SP_POP_PTR();
+  fprintf(stderr, "\n--%s--, %d\n", pStr->chars, pStr->len);
   PFORTHDICTENT pDE = forthFindDictEntFrom(pDEFrom, pStr->chars);
   if (pDE == NULL)
     SP_PUSH(FALSE);
@@ -6756,7 +6753,7 @@ static void prim_TO_CLI(void)
 // OS'
 static void prim_OS_QUOTE(void)
 {
-  // start of literal string, move up to "
+  // start of literal string, move up to '
   forth_WORD('\'');
   SP_PUSH_PTR(pWBFR->chars);
   SP_PUSH(pWBFR->len);
