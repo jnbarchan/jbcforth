@@ -6,11 +6,22 @@
 #undef READLINE
 #endif
 
+//TODO
+// Changed default to NOSEMAPHORE unless SEMAPHORE is defined
+// because implementation has TODOs
+#ifndef SEMAPHORE
+#define NOSEMAPHORE
+#endif
+
 #ifndef NOSEMAPHORE
 #define SEMAPHORE
 #else
 #undef SEMAPHORE
 #endif
+
+#include <stdint.h>
+#include <stdio.h>
+#include "defs.h"
 
 extern int external_errno(void);
 extern void external_perror(const char *__s);
@@ -33,6 +44,7 @@ extern int32_t external_fork(void);
 extern int external_system(const char *__command);
 extern int32_t external_time(void);
 extern int32_t external_getmicrotime(void);
+unsigned int external_sleep(unsigned int seconds);
 
 #ifdef	SEMAPHORE
 extern int forth_semid;

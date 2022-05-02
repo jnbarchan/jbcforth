@@ -183,17 +183,29 @@ T{ DP @ HERE ( -> ) = ASSERT }T
 T{ HERE CREATE temp1 FORGET temp1 HERE ( -> ) = ASSERT }T
 T{ HERE CREATE temp1 HERE FORGET temp1 ( -> ) = NOT ASSERT }T
 T{ CREATE temp1 HERE 5 ALLOT HERE ( -> ) SWAP 5 + = ASSERT FORGET temp1 }T
-T{ CREATE temp1 temp1 NFA LAST ( -> ) = ASSERT FORGET temp1 }T
+T{ CREATE temp1 ' temp1 NFA LAST ( -> ) = ASSERT FORGET temp1 }T
 
 \
 \ Test finding dictionary entries
 \
-\ T{ " (FIND)" CONTEXT @ @ (FIND) ( -> ) ASSERT 6 = ASSERT ' (FIND) NFA = ASSERT }T
+T{ FIND temp1 ( -> ) NOT ASSERT }T
+T{ CREATE temp1 FIND temp1 ( -> ) ASSERT }T
+T{ FORGET temp1 FIND temp1 ( -> ) NOT ASSERT }T
+T{ CREATE temp1 CREATE temp2 FORGET temp1 FIND temp2 FIND temp1 ( -> ) NOT ASSERT NOT ASSERT }T
+T{ ( -> ) ." Expect a message on next line..." CR }T
+T{ CREATE temp1 CREATE temp1 FIND temp1 ( -> ) ASSERT }T
+T{ FORGET temp1 FIND temp1 ( -> ) ASSERT }T
+T{ FORGET temp1 FIND temp1 ( -> ) NOT ASSERT }T
+T{ ' NFA NFA ( -> ) DUP C@ 3 = ASSERT COUNT 3 = ASSERT DROP }T
+T{ ' ' NFA ( -> ) DUP C@ 1 0x40 OR = ASSERT COUNT 1 0x40 OR = ASSERT DROP }T
+T{ ' ' NFA ( -> ) C@ 0x1F AND 1 = ASSERT }T
+T{ " (FIND)" CONTEXT @ @ (FIND) ( -> ) ASSERT 6 = ASSERT ' (FIND) NFA = ASSERT }T
 T{ " -FIND" CONTEXT @ @ (FIND) ( -> ) ASSERT 5 = ASSERT ' -FIND NFA = ASSERT }T
 T{ CONTEXT @ @ -FIND -FIND ( -> ) ASSERT 5 = ASSERT ' -FIND NFA = ASSERT }T
 T{ FIND FIND ( -> ) ' FIND NFA = ASSERT }T
-
-\ crapola
+T{ CREATE temp1 CREATE temp2 ' temp2 NFA (FINDPREV) ( -> ) ' temp1 NFA = ASSERT }T FORGET temp1
+T{ CREATE temp1 ' temp1 NFA (FORGET) FIND temp1 ( -> ) NOT ASSERT }T
+T{ CREATE temp1 " temp1" CONTEXT @ @ -FORGET FIND temp1 ( -> ) NOT ASSERT }T
 
 \
 \ Test :NONAME
@@ -282,7 +294,9 @@ T{ HEX 1E ( -> ) DECIMAL 30 = ASSERT }T
 \
 \ Test defining dictionary entries
 \
+T{ : temp1 [ LAST C@ 5 0x80 OR = ASSERT ] ; LAST C@ 5 = ASSERT ' temp1 ( -> ) ASSERT }T FORGET temp1
 T{ : temp1 1234 ; temp1 ( -> ) 1234 = ASSERT }T FORGET temp1
+T{ R: temp1 [ LAST C@ 5 = ASSERT ] R; LAST C@ 5 = ASSERT ' temp1 ( -> ) ASSERT }T FORGET temp1
 T{ R: temp1 DUP IF 1- temp1 THEN R; 4 temp1 ( -> ) 0= ASSERT }T FORGET temp1
 T{ : temp1 [ SMUDGE ] DUP IF 1- temp1 THEN [ SMUDGE ] ; 4 temp1 ( -> ) 0= ASSERT }T FORGET temp1
 
@@ -486,6 +500,7 @@ T{ " Hello" COUNT EMITS }T CR
 \
 T{ TIME ( -> ) TIME D- -1 D+- 2DUP 0. D= >R 1. D= R> OR ASSERT  }T
 T{ MICRO-TIME ( -> ) 2DROP }T
+T{ 0 SLEEP ( -> ) }T
 
 \
 \ "Pretend" to execute those words which we cannot actually test/execute

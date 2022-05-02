@@ -99,10 +99,10 @@ typedef struct forthdictent FORTHDICTENT, *PFORTHDICTENT;
 
 typedef struct forthdictflag
 {
-  byte smudge    : 1;	// "smudge" bit: 0 => definition complete, 1 => definition incomplete
-  byte immediate : 1;	// "immediate" bit: 0 => compile/execute, 1 => execute always
-  byte unused    : 1;	// "unused" bit
   byte len       : 5;	// name length: 1--30
+  byte unused    : 1;	// "unused" bit
+  byte immediate : 1;	// "immediate" bit: 0 => compile/execute, 1 => execute always
+  byte smudge    : 1;	// "smudge" bit: 0 => definition complete, 1 => definition incomplete
 } __attribute__((packed)) FORTHDICTFLAG;
 #define DICT_SMUDGE	0x80
 #define DICT_IMMEDIATE	0x40
@@ -421,6 +421,7 @@ typedef enum primitive
   primitive_SF_COMMA,		// SF,
   primitive_SF_DOT,		// SF.
   primitive_SF_FETCH,		// SF@
+  primitive_SLEEP,		// SLEEP
   primitive_SMUDGE,		// SMUDGE
   primitive_SP_STORE,		// SP!
   primitive_SP_FETCH,		// SP@
@@ -527,6 +528,9 @@ BUILD_BUG_ON(sizeof(struct forthdictent) != 36);
 // ********** <GLOBAL VARIABLES> **********
 // ****************************************
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
+
 #define FORTH_MACHINE_SIZE (64 * 1024)		// 64K!
 static byte *FORTH_MACHINE;
 static byte *g_pFM, *g_pFM_HIGH;
@@ -600,6 +604,8 @@ static PADDR
   ,pW			// W:		code field pointer
   ,pIP			// IP:		interpretive pointer
   ;
+
+#pragma GCC diagnostic pop
 
 static FORTHDICTNAMECMP dictcmp;	// Function for looking up names in the Dictionary (strncmp() or strncasecmp())
 
@@ -804,6 +810,9 @@ static void forth_LOAD_INTERPRET(const char *pFname);
 // ********** <ERROR CHECKERS> **********
 // ***************************************
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+
 static inline bool VALID_PTR(PVOID p) { return ((PBYTE)p >= g_pFM && (PBYTE)p < g_pFM_HIGH); }
 static inline bool VALID_ADDR(ADDR addr) { return (addr > ADDR_0 && addr < g_pFM_HIGH - g_pFM); }
 static inline bool VALID_DICT_PTR(PVOID p) { return ((PBYTE)p >= g_pFD && (PBYTE)p < g_pFD_HIGH); }
@@ -846,6 +855,8 @@ static inline void CHECK_BTP_EMPTY(PADDR pBTP) { if ((PBYTE)pBTP > g_pBTS) forth
 static inline void CHECK_BTP(void) { CHECK_BTP_FULL(pBTP); CHECK_BTP_EMPTY(pBTP); }
 static inline void CHECK_BTP_HAS_1(void) { CHECK_BTP_EMPTY(pBTP + 1); }
 
+#pragma GCC diagnostic pop
+
 #ifdef	FAST
 #define VALID_PTR(p)		(TRUE)
 #define VALID_ADDR(addr)	(TRUE)
@@ -884,6 +895,9 @@ static inline void CHECK_BTP_HAS_1(void) { CHECK_BTP_EMPTY(pBTP + 1); }
 // ****************************************
 // ********** <INLINE FUNCTIONS> **********
 // ****************************************
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
 
 // convert a C pointer (any type) to an ADDR
 static inline ADDR PTR_TO_ADDR(PVOID p) { if (p == NULL) return ADDR_0; CHECK_PTR(p); return (PBYTE)p - g_pFM; }
@@ -1017,6 +1031,8 @@ static inline PADDR memafind(register PADDR pSrc, ADDR a, size_t n)
   return NULL;
 }
 
+#pragma GCC diagnostic pop
+
 // *****************************************
 // ********** </INLINE FUNCTIONS> **********
 // *****************************************
@@ -1056,10 +1072,13 @@ static inline int forth_putcount(byte count, const char *pChars)
   return fwrite(pChars, sizeof(char), count, stdout);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
 static inline int forth_puts(const char *pChars)
 {
   return forth_putcount(strlen(pChars), pChars);
 }
+#pragma GCC diagnostic pop
 
 static int forth_oscommand(const char *pChars)
 {
@@ -1381,7 +1400,7 @@ static void forthDumpMemBytes(ADDR addr, SINGLE num)
     for (int i = 0; i < 16 && i < num; i++)
     {
       char c = pMem[i];
-      if (c <= ' ' || c >= 0x80)
+      if (c <= ' ' || (unsigned char)c >= 0x80)
         c = '.';
       fprintf(stdout, "%c ", c);
     }
@@ -1531,10 +1550,11 @@ static void forthDumpDictionary(void)
 }
 
 // find starting from some FORTHDICTENT the FORTHDICTENT with NFA.name = pDictName
-static PFORTHDICTENT forthFindDictEntFrom(PFORTHDICTENT pDE, const FORTHDICTNAME pDictName)
+static PFORTHDICTENT forthFindDictEntFrom(PFORTHDICTENT pDE, const char *pDictName, int len)
 {
   // walk down FORTH_DICTIONARY from pDE
-  byte len = strlen(pDictName);
+  if (len < 0)
+    len = strlen(pDictName);
   while (pDE != NULL)
   {
     if (!pDE->nfa.flag.smudge)	// if "smudge" bit is set, this is an incomplete definition, and is skipped
@@ -1552,7 +1572,7 @@ static PFORTHDICTENT forthFindDictEnt(const FORTHDICTNAME pDictName)
   // current top-most Dictionary Entry for Compiler Searches
   PFORTHDICTENT pDE = forthStartSearchDictEnt();
   // walk down FORTH_DICTIONARY
-  return forthFindDictEntFrom(pDE, pDictName);
+  return forthFindDictEntFrom(pDE, pDictName, -1);
 }
 
 // find the FORTHDICTENT with NFA.name = pWord
@@ -2332,9 +2352,11 @@ static void forthDecompileColonShowInstruction(PADDR *ppADDR, SINGLE colour)
   // check that we are pointing into the active Dictionary, at least
   CHECK_DICT_PTR(pDEWord);
 
+#ifdef READLINE
   // if word to be highlighted, start highlighting now
   if (colour >= 0)
     readline_output_color(stdout, colour);
+#endif
 
   // output that word's name
   PNFA pNFA = SAFE_PNFA(pDEWord);
@@ -2430,9 +2452,11 @@ static void forthDecompileColonShowInstruction(PADDR *ppADDR, SINGLE colour)
     }
   *ppADDR = pADDR;
 
+#ifdef READLINE
   // if word to be highlighted, end highlighting now
   if (colour >= 0)
     readline_output_color_white(stdout);
+#endif
 
   external_fflush(stdout);
 }
@@ -2474,7 +2498,7 @@ static void forthDecompileDictEnt(PFORTHDICTENT pDE, PADDR pCurrentInstruction)
     fprintf(stdout, "FVARIABLE %s %g %s F!", pDE->nfa.name, pDE->pfa.floats[0], pDE->nfa.name);
     break;
   case cfe_string_variable:
-    fprintf(stdout, "%hd $VARIABLE %s \" %s\" %s $!", pDE->pfa.varstring[0].maxlen, pDE->nfa.name, pDE->pfa.varstring[0].string.chars, pDE->nfa.name);
+    fprintf(stdout, "%d $VARIABLE %s \" %s\" %s $!", pDE->pfa.varstring[0].maxlen, pDE->nfa.name, pDE->pfa.varstring[0].string.chars, pDE->nfa.name);
     break;
   case cfe_user_variable:
     fprintf(stdout, "0x%02X USER %s", pDE->pfa.bytes[0], pDE->nfa.name);
@@ -2498,14 +2522,21 @@ static void forthDecompileDictEnt(PFORTHDICTENT pDE, PADDR pCurrentInstruction)
       fprintf(stdout, "(DOES>) ");
       pADDR = ADDR_TO_PTR(pDE->pfa.addrs[0]);
     }
+    else
+    {
+        forth_ERROR(err_NOT_IMPLEMENTED);
+        return;
+    }
     while (*pADDR != PFA_ADDR_EXIT)
     {
       SINGLE colour = -1;
       if (pCurrentInstruction != NULL)			// want instruction highlighting
+      {
         if (pADDR == pCurrentInstruction)		// current instruction
           colour = 2;					// highlight in green
         else if (forthFindBreakpoint(*pADDR) != NULL)	// word has Breakpoint
           colour = 1;					// highlight in red
+      }
       forthDecompileColonShowInstruction(&pADDR, colour);
     }
     fprintf(stdout, ";");
@@ -2530,6 +2561,7 @@ static void forthDecompileDictEnt(PFORTHDICTENT pDE, PADDR pCurrentInstruction)
   fprintf(stdout, "\n");
 }
 
+#ifdef READLINE
 // display the Backtrace Stack
 static void forthDebugBacktrace(void)
 {
@@ -2537,12 +2569,17 @@ static void forthDebugBacktrace(void)
   {
     PFORTHDICTENT pDE = ADDR_TO_PTR(*BTP_N(level * 2));
     PADDR pCurrentInstruction = ADDR_TO_PTR(*BTP_N(level * 2 - 1));
+#ifdef READLINE
     readline_output_color(stdout, 6);
-    fprintf(stdout, "[%hu] ", level - 1);
+#endif
+    fprintf(stdout, "[%u] ", level - 1);
+#ifdef READLINE
     readline_output_color_white(stdout);
+#endif
     forthDecompileDictEnt(pDE, pCurrentInstruction);
   }
 }
+#endif
 
 // **********************************
 // ********** </DEBUGGING> **********
@@ -2579,7 +2616,7 @@ static void forthSetStringInput(PFORTHSTRING pStr)
   forth_FILE_IN_SET_STRING();
   g_fspIN = pStr;
   // set Input Stream to read from g_fspIN
-  pIBUF = pStr->chars;
+  pIBUF = (PBYTE)pStr->chars;
 }
 
 // set so that input comes from file
@@ -2754,7 +2791,7 @@ static SINGLE forth_FILE_QUERY(void)
   if (pIBUF == NULL)
     forth_ERROR(err_SYS_MEM);
   // get one line into pIBUF
-  char *in = fgets(pIBUF, MASS_STORAGE_BLOCK_SIZE, g_fspIN);
+  char *in = fgets((char *)pIBUF, MASS_STORAGE_BLOCK_SIZE, g_fspIN);
   if (in == NULL) // EOF
     return -1;
   forth_ERR_LINE++;
@@ -2851,18 +2888,21 @@ static SINGLE forth_KEYBOARD_QUERY(const char *prompt, bool addHistory)
   in = readline_getline(prompt, addHistory);
   if (in != NULL)
   {
-    strncpy(pTIB, in, TERMINAL_INPUT_BUFFER_SIZE - 1);
+    strncpy((char *)pTIB, in, TERMINAL_INPUT_BUFFER_SIZE - 1);
     pTIB[TERMINAL_INPUT_BUFFER_SIZE - 1] = '\0';
-    in = pTIB;
+    in = (char *)pTIB;
   }
 #else	// !READLINE
   if (prompt != NULL)
     fputs(prompt, stdout);
   external_fflush(stdout);
-  in = fgets(pTIB, TERMINAL_INPUT_BUFFER_SIZE, stdin);
+  in = fgets((char *)pTIB, TERMINAL_INPUT_BUFFER_SIZE, stdin);
 #endif // READLINE
 
 #ifdef	SEMAPHORE
+  //TODO
+  // Big problem here: if interrupted above (e.g. Ctrl+C => EINTR)
+  // this code will not be reached and the forth_semacquire() will not be released
   forth_semrelease();
 #endif
 
@@ -3438,6 +3478,7 @@ static void forthBootupDict(void)
   forthCreateDictEnt_primitive("LOAD\"", primitive_LOAD_QUOTE, (DICT_IMMEDIATE));
   forthCreateDictEnt_primitive("TIME", primitive_TIME, 0);
   forthCreateDictEnt_primitive("MICRO-TIME", primitive_MICRO_TIME, 0);
+  forthCreateDictEnt_primitive("SLEEP", primitive_SLEEP, 0);
   forthCreateDictEnt_primitive("OSCLI", primitive_OS_CLI, 0);
   forthCreateDictEnt_primitive("(CLI)", primitive_BRACKET_CLI, 0);
   forthCreateDictEnt_primitive(">CLI", primitive_TO_CLI, (DICT_IMMEDIATE));
@@ -5813,11 +5854,15 @@ static void prim_VLIST(void)
     {
       // highlight word in green if it is a Vocabulary
       bool isVocabulary = forthDictEntIsVocabulary(pDE);
+#ifdef READLINE
       if (isVocabulary)
         readline_output_color(stdout, 2);
+#endif
       fprintf(stdout, "%s ", pDE->nfa.name);
+#ifdef READLINE
       if (isVocabulary)
         readline_output_color_white(stdout);
+#endif
     }
     pDE = DP_TO_PREV_DP(pDE);
   }
@@ -5837,8 +5882,7 @@ static void prim_BRACKET_FIND(void)
 {
   PFORTHDICTENT pDEFrom = SP_POP_PTR();
   PFORTHSTRING pStr = SP_POP_PTR();
-  fprintf(stderr, "\n--%s--, %d\n", pStr->chars, pStr->len);
-  PFORTHDICTENT pDE = forthFindDictEntFrom(pDEFrom, pStr->chars);
+  PFORTHDICTENT pDE = forthFindDictEntFrom(pDEFrom, pStr->chars, pStr->len);
   if (pDE == NULL)
     SP_PUSH(FALSE);
   else
@@ -5855,7 +5899,7 @@ static void prim_DASH_FIND(void)
   PFORTHDICTENT pDEFrom = SP_POP_PTR();
   // get the next word as the Dictionary Entry name
   forth_WORD(' ');
-  PFORTHDICTENT pDE = forthFindDictEntFrom(pDEFrom, pWBFR->chars);
+  PFORTHDICTENT pDE = forthFindDictEntFrom(pDEFrom, pWBFR->chars, -1);
   if (pDE == NULL)
     SP_PUSH(FALSE);
   else
@@ -5907,7 +5951,7 @@ static void prim_DASH_FORGET(void)
 {
   PFORTHDICTENT pDEFrom = SP_POP_PTR();
   PFORTHSTRING pStr = SP_POP_PTR();
-  PFORTHDICTENT pDE = forthFindDictEntFrom(pDEFrom, pStr->chars);
+  PFORTHDICTENT pDE = forthFindDictEntFrom(pDEFrom, pStr->chars, pStr->len);
   if (pDE == NULL)
     forth_ERROR(err_NOT_IN_CURRENT_VOCAB);
   forthForgetDictEnt(pDE);
@@ -6711,6 +6755,13 @@ static void prim_MICRO_TIME(void)
 {
   DOUBLE micro_time = external_getmicrotime();
   SP_PUSH_DOUBLE(micro_time);
+}
+
+// SLEEP
+static void prim_SLEEP(void)
+{
+  SINGLE num = SP_POP();
+  external_sleep(num);
 }
 
 // OSCLI
@@ -7637,6 +7688,9 @@ static void forth_EXECUTE_PRIMITIVE(primitive_t prim)
   case primitive_SF_FETCH:		// SF@
     prim_SF_FETCH(); break;
 
+  case primitive_SLEEP:         // SLEEP
+    prim_SLEEP(); break;
+
   case primitive_SMUDGE:		// SMUDGE
     prim_SMUDGE(); break;
 
@@ -7964,7 +8018,7 @@ static void forth_DEBUG_EXECUTE_DICTENT(const PADDR pADDR, bool *pDebug_suspend_
   forth_ERROR(err_NOT_IMPLEMENTED);
 #else
   PFORTHDICTENT pDEColon = ADDR_TO_PTR(*BTP_1());	// Colon Definition being executed
-  PADDR pCurrentInstruction = ADDR_TO_PTR(*BTP_0());	// current Instruction
+  PADDR UNUSED(pCurrentInstruction) = ADDR_TO_PTR(*BTP_0());	// current Instruction
   PFORTHDICTENT pDE = ADDR_TO_PTR(*pADDR);		// current word to execute
   // if Debugging suspended, resume Debugging if Dictionary Entry has breakpoint
   if (g_pTRACE_VARS->debug_suspend)
@@ -8780,7 +8834,7 @@ static void forthMAIN(void)
 // ****************************
 
 // main
-void main(int argc, char*argv[])
+int main(int UNUSED(argc), char* UNUSED(argv[]))
 {
   forth_ERR_FILE = NULL;
   g_bExitOnError = TRUE;

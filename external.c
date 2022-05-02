@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
@@ -112,6 +113,11 @@ extern int32_t external_getmicrotime(void)
   struct timeval tv;
   gettimeofday(&tv, NULL);
   return tv.tv_usec;
+}
+
+extern unsigned int external_sleep(unsigned int seconds)
+{
+  return sleep(seconds);
 }
 
 
