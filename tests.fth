@@ -23,6 +23,7 @@ FORTH tests DEFINITIONS
 : INIT-TC-ARRAY		( ... )
     \ The array for counting how many times each word is executed
     \ each element is 2 singles: first single is address of Dictionary Entry [xt], second single is how many times executed
+    \ stored in *descending* Dictionary address order
     \ array must currently have 0 elements and be at HERE on entry
     \ this initialises the array, allotting in the Dictionary and incrementing array's element count
     HERE 4 - >R		( save address of array's count )
@@ -263,8 +264,8 @@ T{ 0 -2 -1 * - 1 * 2 * ( -> ) -4 = ASSERT }T
 T{ 0 1- 2- 2* 1+ 2+ BL + 1+ 2/ ( -> ) 15 = ASSERT }T
 T{ 16 3 ( -> ) 2DUP / 5 = ASSERT 2DUP MOD 1 = ASSERT /MOD 5 = ASSERT 1 = ASSERT }T
 T{ 5. 16. 3. -1. ( -> ) D- D+ D* 2DUP 100. D= ASSERT 4. D/ 25. D= ASSERT }T
-T{ 5 -2 -7 3 ( -> ) NEGATE -3 = ASSERT ABS 7 = ASSERT +- -5 = ASSERT }T
-T{ 5. -2 -7. 3. ( -> ) DNEGATE -3. D= ASSERT DABS 7. D= ASSERT D+- -5. D= ASSERT }T
+T{ 5 -2 -7 -3 3 ( -> ) NEGATE -3 = ASSERT NEGATE 3 = ASSERT ABS 7 = ASSERT +- -5 = ASSERT }T
+T{ 5. -2 -7. -3. 3. ( -> ) DNEGATE -3. D= ASSERT DNEGATE 3. D= ASSERT DABS 7. D= ASSERT D+- -5. D= ASSERT }T
 T{ -2 2 2DUP ( -> ) MAX 2 = ASSERT MIN -2 = ASSERT }T
 T{ 30000 DUP DUP DUP DUP DUP ( -> ) * / -5 = ASSERT */ 30000 = ASSERT }T
 T{ 30000 DUP 70 ( -> ) */MOD 12086 = ASSERT 60 = ASSERT }T
@@ -396,6 +397,7 @@ T{ CREATE temp1 9. D, ( -> ) temp1 D@ 9. D= ASSERT FORGET temp1 }T
 T{ FVARIABLE temp1 ( -> ) temp1 F@ 0.0 F= ASSERT 9.0 temp1 F! temp1 F@ 9.0 F= ASSERT FORGET temp1 }T
 T{ CREATE temp1 9.0 F, ( -> ) temp1 F@ 9.0 F= ASSERT FORGET temp1 }T
 T{ CREATE temp1 0 C, ( -> ) temp1 C@ 0= ASSERT 9 temp1 C! temp1 C@ 9 = ASSERT FORGET temp1 }T
+T{ CREATE temp1 65 C, ( -> ) temp1 C1+! temp1 C@ 66 = ASSERT 10 temp1 C+! temp1 C@ 76 = ASSERT FORGET temp1 }T
 T{ CREATE temp1 0.0 F->SF SF, ( -> ) temp1 SF@ SF->F 0.0 F= ASSERT 9.0 F->SF temp1 SF! temp1 SF@ SF->F 9.0 F= ASSERT FORGET temp1 }T
 T{ 9 CONSTANT temp1 ( -> ) temp1 9 = ASSERT FORGET temp1 }T
 T{ 9. DCONSTANT temp1 ( -> ) temp1 9. D= ASSERT FORGET temp1 }T
@@ -452,6 +454,14 @@ T{ 10 $VARIABLE temp1 ( -> ) temp1 COUNT 0= ASSERT DROP }T FORGET temp1
 T{ 10 $VARIABLE temp1 ( -> ) " Hello" COUNT temp1 $! temp1 COUNT 5 = ASSERT DROP }T FORGET temp1
 T{ 10 $VARIABLE temp1 ( -> ) " Hello" COUNT temp1 $! " Bye" COUNT temp1 $+ temp1 COUNT 8 = ASSERT DROP }T FORGET temp1
 T{ 10 $VARIABLE temp1 ( -> ) " Hello" COUNT temp1 ($!) " Bye" COUNT temp1 ($+) temp1 COUNT 8 = ASSERT DROP }T FORGET temp1
+T{
+6 $VARIABLE temp1 ( -> ) " Hello" COUNT temp1 $! ( -> )
+temp1 " Hello" $CMP 0= ASSERT
+temp1 " Hell" $CMP 0> ASSERT
+temp1 " Helloz" $CMP 0< ASSERT
+temp1 " HellZ" $CMP 0> ASSERT
+temp1 " Hellz" $CMP 0< ASSERT
+}T FORGET temp1
 T{ CREATE temp1 HERE " Hello" COUNT TEXT 6 ALLOT ( -> ) " Hello" 6 MEMCMP 0= ASSERT }T FORGET temp1
 T{ 32 4HEX ( -> ) 4 = ASSERT " 0020" COUNT MEMCMP 0= ASSERT }T
 
@@ -468,6 +478,7 @@ T{ OS-PID ( -> ) OR ASSERT }T
 \ Test LOAD file stuff
 \
 T{ ?LOAD" non-existent.fth" ( -> ) NOT ASSERT }T
+T{ ?LOAD" non-existent.fth" ( -> ) NOT ASSERT OSERRNO 2 = ASSERT }T
 \ T{ ?LOAD" non-existent.fth" ( -> ) NOT ASSERT OSERROR }T
 T{ ?LOAD" empty.fth" ( -> ) ASSERT }T
 T{ : temp1 ?LOAD" empty.fth" ; ( -> ) temp1 ASSERT }T FORGET temp1
@@ -525,6 +536,61 @@ T{ 0 SLEEP ( -> ) }T
 ' TRACE-EXECUTE NFA TC-PRETEND-EXECUTE
 ' (TRACE-EXECUTE-STACK) NFA TC-PRETEND-EXECUTE
 ' (TRACE-EXECUTE) NFA TC-PRETEND-EXECUTE
+
+\
+\ Test 1ARRAY stuff
+\
+T{ 50 2 1ARRAY temp1 ( -> ) 0 temp1 1ARRAY-COUNT 50 = ASSERT 0 temp1 1ARRAY-SIZE 2 = ASSERT }T FORGET temp1
+T{
+50 2 1ARRAY temp1
+:INLINE 50 0 DO I 100 + I temp1 ! LOOP ;INLINE
+:INLINE 50 0 DO I temp1 @ I 100 + = ASSERT LOOP ;INLINE
+: temp2 @ - ;
+' temp1 NFA ' temp2 NFA 500 1ARRAY-BINARY-SEARCH ( -> ) 0= ASSERT
+' temp1 NFA ' temp2 NFA 123 1ARRAY-BINARY-SEARCH ( -> ) 23 temp1 = ASSERT
+}T FORGET temp2 FORGET temp1
+T{
+26 1 1ARRAY temp1
+:INLINE 26 0 DO I 65 + I temp1 C! LOOP ;INLINE
+: temp2 C@ - ;
+' temp1 NFA ' temp2 NFA 91 1ARRAY-BINARY-SEARCH ( -> ) 0= ASSERT
+' temp1 NFA ' temp2 NFA 90 1ARRAY-BINARY-SEARCH ( -> ) 25 temp1 = ASSERT
+}T FORGET temp2 FORGET temp1
+T{
+26 7 1ARRAY temp1
+:INLINE 26 0 DO " ABCDEF" I temp1 7 CMOVE I temp1 4 + I 3 - SWAP C+! LOOP ;INLINE
+: temp2 $CMP ;
+' temp1 NFA ' temp2 NFA " ABCYEZ" 1ARRAY-BINARY-SEARCH ( -> ) 0= ASSERT
+' temp1 NFA ' temp2 NFA " ABCYEF" 1ARRAY-BINARY-SEARCH ( -> ) 24 temp1 = ASSERT
+FORGET temp2
+: temp2 $CMP NEGATE ;
+' temp1 NFA ' temp2 NFA " ABCYEF" 1ARRAY-BINARY-SEARCH ( -> ) 0= ASSERT
+' temp1 NFA ' temp2 NFA 1ARRAY-BUBBLE-SORT
+' temp1 NFA ' temp2 NFA " ABCYEF" 1ARRAY-BINARY-SEARCH ( -> ) 1 temp1 = ASSERT
+}T FORGET temp2 FORGET temp1
+
+\
+\ Test random.fth stuff
+\
+T{ 1234 (SRND) ( -> ) (RND-SEED) @ 1234 = ASSERT }T
+T{ 100 RND ( -> ) 75 = ASSERT (RND-SEED) @ 24697 = ASSERT }T
+T{ :INLINE 100 0 DO 6 RND DUP -1 > SWAP 6 < AND ASSERT LOOP ;INLINE ( -> ) }T
+T{ TIME D->S (SRND) }T
+T{
+25 2 1ARRAY temp1
+:INLINE 25 0 DO (RND) I temp1 ! LOOP ;INLINE
+: temp2 @ SWAP @ SWAP - ;
+' temp1 NFA ' temp2 NFA 1ARRAY-BUBBLE-SORT
+:INLINE 25 1- 0 DO I temp1 DUP @ SWAP 2+ @ ( -> ) > NOT ASSERT LOOP ;INLINE
+}T FORGET temp2 FORGET temp1
+T{ 1000 CALC-PI ( -> ) FDUP F>R 3.0 F< NOT R>F 3.3 F< AND ASSERT }T
+
+' MEMW-REPEAT NFA TC-PRETEND-EXECUTE
+' (MEMW-REPEAT) NFA TC-PRETEND-EXECUTE
+' MEMW-MATCH NFA TC-PRETEND-EXECUTE
+' RND-DISTRIB NFA TC-PRETEND-EXECUTE
+' RND-ARRAY NFA TC-PRETEND-EXECUTE
+
 
 \
 \ All done!

@@ -29,6 +29,13 @@ FORTH DEFINITIONS
     DUP >R EXECUTE R> (FORGET)
   ; IMMEDIATE
 
+: MEMSWAP	( addr1\addr2\count ... )
+    >R
+    DUP HERE R@ CMOVE
+    2DUP R@ CMOVE
+    DROP HERE SWAP R> CMOVE
+  ;
+
 \
 \ 1ARRAY stuff
 \
@@ -57,9 +64,27 @@ FORTH DEFINITIONS
 : 1ARRAY-SIZE	( addr ... size )
     2- @
   ;
+: 1ARRAY-BUBBLE-SORT		( array\cmp ... )
+    (LOCAL) cmp (LOCAL) array	( array\cmp ... )
+    0 (LOCAL) swapped
+    0 array @EXECUTE 1ARRAY-SIZE (LOCAL) size
+    BEGIN
+      0 swapped !
+      0 array @EXECUTE 1ARRAY-COUNT 1-	( ... count-1 )
+      0 DO
+        I array @EXECUTE DUP size @ +
+        2DUP cmp @EXECUTE 0> IF		( array[I] > array[I + 1] )
+          size @ MEMSWAP		( array[I] <-> array[I + 1] )
+          1 swapped !
+        ELSE
+          2DROP
+        THEN
+      LOOP
+    swapped @ NOT UNTIL	( ... )
+  ;
 : 1ARRAY-BINARY-SEARCH	( array\cmp\val ... &array[n]/0 )
     (LOCAL) val (LOCAL) cmp (LOCAL) array	( array\cmp\val ... )
-    0 0 array @EXECUTE 1ARRAY-COUNT 1-	( 0\count )
+    0 0 array @EXECUTE 1ARRAY-COUNT 1-	( 0\count-1 )
     BEGIN
       2DUP 1+ <				( low\high\f )
     WHILE				( low < high )

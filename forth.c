@@ -149,6 +149,7 @@ typedef enum primitive
   primitive_DOLLAR_STORE,	// $!
   primitive_DOLLAR_PLUS,	// $+
   primitive_DOLLAR_COMMA,	// $,
+  primitive_DOLLAR_CMP,		// $CMP
   primitive_DOLLAR_CONSTANT,	// $CONSTANT
   primitive_DOLLAR_INTERPRET,	// $INTERPRET
   primitive_DOLLAR_VARIABLE,	// $VARIABLE
@@ -260,10 +261,12 @@ typedef enum primitive
   primitive_BRANCH,		// BRANCH
   primitive_BREAK,		// BREAK
   primitive_C_STORE,		// C!
+  primitive_C_PLUS_STORE,	// C+!
   primitive_C_COMMA,		// C,
   primitive_C_DOT,		// C.
   primitive_C_QUESTION_MARK,	// C?
   primitive_C_FETCH,		// C@
+  primitive_C_1_PLUS_STORE,	// C1+!
   primitive_CASE_INSENSITIVE,	// CASE-INSENSITIVE
   primitive_CASE_SENSITIVE,	// CASE-SENSITIVE
   primitive_CFA,		// CFA
@@ -396,6 +399,7 @@ typedef enum primitive
   primitive_OS_FORK,		// OS-FORK
   primitive_OS_PID,		// OS-PID
   primitive_OS_CLI,		// OSCLI
+  primitive_OS_ERRNO,		// OSERRNO
   primitive_OS_ERROR,		// OSERROR
   primitive_OVER,		// OVER
   primitive_PAD,		// PAD
@@ -786,6 +790,7 @@ static byte forthDictStoreForthStringSize(byte len);
 static bool g_bExitOnError;
 static void forth_QUIT(void);
 static void forth_MSG_HASH(FORTH_ERR_NUM err);
+static void forth_OS_ERRNO(void);
 static void forth_OS_ERROR(void);
 static void forth_ERROR(FORTH_ERR_NUM err);
 static void forth_MESSAGE_WORD_NOT_FOUND(PFORTHSTRING pWord);
@@ -3133,6 +3138,7 @@ static void forthBootupDict(void)
   forthCreateDictEnt_primitive("QUIT", primitive_QUIT, 0);
   forthCreateDictEnt_primitive("MSG#", primitive_MSG_HASH, 0);
   forthCreateDictEnt_execvec("MESSAGE", primitive_MSG_HASH);
+  forthCreateDictEnt_primitive("OSERRNO", primitive_OS_ERRNO, 0);
   forthCreateDictEnt_primitive("OSERROR", primitive_OS_ERROR, 0);
   forthCreateDictEnt_primitive("ERROR", primitive_ERROR, 0);
   forthCreateDictEnt_primitive("?ERROR", primitive_QUERY_ERROR, 0);
@@ -3272,6 +3278,8 @@ static void forthBootupDict(void)
   forthCreateDictEnt_primitive("F!", primitive_F_STORE, 0);
   forthCreateDictEnt_primitive("SF!", primitive_SF_STORE, 0);
   forthCreateDictEnt_primitive("C!", primitive_C_STORE, 0);
+  forthCreateDictEnt_primitive("C+!", primitive_C_PLUS_STORE, 0);
+  forthCreateDictEnt_primitive("C1+!", primitive_C_1_PLUS_STORE, 0);
   forthCreateDictEnt_primitive("@", primitive_FETCH, 0);
   forthCreateDictEnt_primitive("D@", primitive_D_FETCH, 0);
   forthCreateDictEnt_primitive("F@", primitive_F_FETCH, 0);
@@ -3283,6 +3291,7 @@ static void forthBootupDict(void)
   forthCreateDictEnt_primitive("ERASE", primitive_ERASE, 0);
   forthCreateDictEnt_primitive("BLANKS", primitive_BLANKS, 0);
   forthCreateDictEnt_primitive("MEMCMP", primitive_MEMCMP, 0);
+  forthCreateDictEnt_primitive("$CMP", primitive_DOLLAR_CMP, 0);
   forthCreateDictEnt_primitive("MEMDUMP", primitive_MEMDUMP, 0);
   forthCreateDictEnt_primitive("MEMDUMPW", primitive_MEMDUMP_W, 0);
   // ---------- Store/Fetch definitions
@@ -3572,6 +3581,12 @@ static void vect_MESSAGE(void)
 
   // execute the FORTHDICTENT which the vector is assigned to do
   forth_EXECUTE_EXVEC(s_pDEMessage->pfa.addrs[0]);
+}
+
+// OSERRNO
+static void prim_OS_ERRNO(void)
+{
+  forth_OS_ERRNO();
 }
 
 // OSERROR
@@ -4576,6 +4591,20 @@ static void prim_C_STORE(void)
   *(PBYTE)ADDR_TO_PTR(addr) = n;
 }
 
+// C+!
+static void prim_C_PLUS_STORE(void)
+{
+  PBYTE pByte = SP_POP_PTR();
+  *pByte += SP_POP();
+}
+
+// C1+!
+static void prim_C_1_PLUS_STORE(void)
+{
+  PBYTE pByte = SP_POP_PTR();
+  (*pByte)++;
+}
+
 // @
 static void prim_FETCH(void)
 {
@@ -4830,6 +4859,23 @@ static void prim_DOLLAR_STORE(void)
   if (count > pMLStr->maxlen)
     forth_ERROR(err_BAD_PARAM);
   prim_BRACKET_DOLLAR_STORE();
+}
+
+// $CMP
+static void prim_DOLLAR_CMP(void)
+{
+  PFORTHSTRING pStr2 = SP_POP_PTR();
+  PFORTHSTRING pStr1 = SP_POP_PTR();
+  byte minlen = (pStr1->len < pStr2->len) ? pStr1->len : pStr2->len;
+  SINGLE cmp = memcmp(pStr1->chars, pStr2->chars, minlen);
+  if (cmp == 0)
+  {
+    if (pStr1->len > pStr2->len)
+      cmp = (unsigned char)pStr1->chars[minlen];
+    else if (pStr2->len > pStr1->len)
+      cmp = -(unsigned char)pStr2->chars[minlen];
+  }
+  SP_PUSH(cmp);
 }
 
 // ---------- String definitions
@@ -6872,6 +6918,9 @@ static void forth_EXECUTE_PRIMITIVE(primitive_t prim)
   case primitive_DOLLAR_COMMA:		// $,
     prim_DOLLAR_COMMA(); break;
 
+  case primitive_DOLLAR_CMP:		// $CMP
+    prim_DOLLAR_CMP(); break;
+
   case primitive_DOLLAR_CONSTANT:	// $CONSTANT
     prim_DOLLAR_CONSTANT(); break;
 
@@ -7205,6 +7254,9 @@ static void forth_EXECUTE_PRIMITIVE(primitive_t prim)
   case primitive_C_STORE:		// C!
     prim_C_STORE(); break;
 
+  case primitive_C_PLUS_STORE:	// C+!
+    prim_C_PLUS_STORE(); break;
+
   case primitive_C_COMMA:		// C,
     prim_C_COMMA(); break;
 
@@ -7216,6 +7268,9 @@ static void forth_EXECUTE_PRIMITIVE(primitive_t prim)
 
   case primitive_C_FETCH:		// C@
     prim_C_FETCH(); break;
+
+  case primitive_C_1_PLUS_STORE:// C1+!
+    prim_C_1_PLUS_STORE(); break;
 
   case primitive_C_LIT:			// CLIT
     prim_C_LIT(); break;
@@ -7612,6 +7667,9 @@ static void forth_EXECUTE_PRIMITIVE(primitive_t prim)
 
   case primitive_OS_CLI:		// OSCLI
     prim_OS_CLI(); break;
+
+  case primitive_OS_ERRNO:		// OSERRNO
+    prim_OS_ERRNO(); break;
 
   case primitive_OS_ERROR:		// OSERROR
     prim_OS_ERROR(); break;
@@ -8489,6 +8547,12 @@ static void forth_MESSAGE(FORTH_ERR_NUM err)
   }
   else
     forth_MSG_HASH(err);
+}
+
+// OSERRNO
+static void forth_OS_ERRNO(void)
+{
+    SP_PUSH(external_errno());
 }
 
 // OSERROR
