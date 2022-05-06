@@ -6509,10 +6509,10 @@ static void prim_FETCH_EXECUTE(void)
 // (TRACE-EXECUTE)
 static void prim_BRACKET_TRACE_EXECUTE(void)
 {
-  bool prePost = SP_POP();
+  bool postPre = SP_POP();
   PFORTHDICTENT pDE = SP_POP_PTR();
   CHECK_DICT_PTR(pDE);
-  if (prePost)
+  if (!postPre)
     fprintf(stdout, "->%s ", pDE->nfa.name);
   else
   {
@@ -6525,10 +6525,10 @@ static void prim_BRACKET_TRACE_EXECUTE(void)
 // (TRACE-EXECUTE-STACK)
 static void prim_BRACKET_TRACE_EXECUTE_STACK(void)
 {
-  bool prePost = SP_POP();
+  bool postPre = SP_POP();
   PFORTHDICTENT pDE = SP_POP_PTR();
   CHECK_DICT_PTR(pDE);
-  if (prePost)
+  if (!postPre)
   {
     prim_H_DOT_S();
     fprintf(stdout, "->%s ", pDE->nfa.name);
@@ -8208,7 +8208,7 @@ static void forth_EXECUTE_DICTENT(const PFORTHDICTENT pDE)
 
   // determine whether this Dictionary Entry's execution is being traced
   if (g_pTRACE_VARS->trace && !g_pTRACE_VARS->trace_suspend)
-    forth_TRACE_EXECUTE_DICTENT(pDE, TRUE);
+    forth_TRACE_EXECUTE_DICTENT(pDE, FALSE);
 
   switch (pDE->cfa)
   {
@@ -8295,7 +8295,7 @@ static void forth_EXECUTE_DICTENT(const PFORTHDICTENT pDE)
 
   // determine whether this Dictionary Entry's execution is being traced
   if (g_pTRACE_VARS->trace && !g_pTRACE_VARS->trace_suspend)
-    forth_TRACE_EXECUTE_DICTENT(pDE, FALSE);
+    forth_TRACE_EXECUTE_DICTENT(pDE, TRUE);
 }
 
 // ****************************************

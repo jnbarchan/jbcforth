@@ -466,6 +466,34 @@ T{ CREATE temp1 HERE " Hello" COUNT TEXT 6 ALLOT ( -> ) " Hello" 6 MEMCMP 0= ASS
 T{ 32 4HEX ( -> ) 4 = ASSERT " 0020" COUNT MEMCMP 0= ASSERT }T
 
 \
+\ Test COMPILE/INTERPRET stuff
+\
+T{
+: temp1 STATE @ IF COMPILE LIT , THEN ; IMMEDIATE
+temp1 ( -> )
+: temp2 [ 1234 ] temp1 ; temp2 ( -> ) 1234 = ASSERT FORGET temp2
+: temp2 STATE @ IF
+    SWAP [COMPILE] temp1
+    [COMPILE] temp1
+  THEN ; IMMEDIATE
+: temp3 [ 123456. ] temp2 ; temp3 ( -> ) 123456. D= ASSERT
+}T FORGET temp3 FORGET temp2 FORGET temp1
+T{ INTERPRET 1234 2* ( -> ) 2468 = ASSERT }T
+T{ INTERPRET" 1234 2*" ( -> ) 2468 = ASSERT }T
+T{ : temp1 INTERPRET" 1234 2*" ; temp1 ( -> ) 2468 = ASSERT }T FORGET temp1
+
+\
+\ Test LOCAL stuff
+\
+T{ : temp1 (LOCAL) param1 4567 (LOCAL) local1 param1 @ local1 @ ; 1234 temp1 ( -> ) 4567 = ASSERT 1234 = ASSERT }T FORGET temp1
+T{
+VARIABLE temp1
+1234 TO temp1 temp1 @ ( -> ) 1234 = ASSERT
+: temp2 4567 TO temp1 temp1 @ ; temp2 ( -> ) 4567 = ASSERT FORGET temp2
+}T FORGET temp1
+T{ : temp1 0 (LOCAL) local1 0 (LOCAL) local2 1234 TO local1 local1 @ 4567 TO local2 local2 @ ; temp1 ( -> ) 4567 = ASSERT 1234 = ASSERT }T FORGET temp1
+
+\
 \ Test OS stuff
 \
 T{ : temp1 " ls >/dev/null" COUNT 2DUP + 0 SWAP C! DROP OSCLI ; ( -> ) temp1 }T FORGET temp1
@@ -528,6 +556,7 @@ T{ 0 SLEEP ( -> ) }T
 ' UNBREAK NFA TC-PRETEND-EXECUTE
 ' BREAK NFA TC-PRETEND-EXECUTE
 ' LIST-BREAK NFA TC-PRETEND-EXECUTE
+' TRACE-ALL NFA TC-PRETEND-EXECUTE
 ' TRACEOFF NFA TC-PRETEND-EXECUTE
 ' TRACEON NFA TC-PRETEND-EXECUTE
 ' TRACE-COLONS NFA TC-PRETEND-EXECUTE
@@ -591,6 +620,10 @@ T{ 1000 CALC-PI ( -> ) FDUP F>R 3.0 F< NOT R>F 3.3 F< AND ASSERT }T
 ' RND-DISTRIB NFA TC-PRETEND-EXECUTE
 ' RND-ARRAY NFA TC-PRETEND-EXECUTE
 
+\
+\ play.fth stuff
+\
+FIND play ?DUP [IF] TC-PRETEND-EXECUTE [THEN]
 
 \
 \ All done!
