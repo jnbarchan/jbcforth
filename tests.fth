@@ -132,6 +132,7 @@ R: T{
 \
 \ Start Tests
 \
+0 ERR-WARN !
 SP! RP!
 FORTH tests DEFINITIONS
 
@@ -193,7 +194,7 @@ T{ FIND temp1 ( -> ) NOT ASSERT }T
 T{ CREATE temp1 FIND temp1 ( -> ) ASSERT }T
 T{ FORGET temp1 FIND temp1 ( -> ) NOT ASSERT }T
 T{ CREATE temp1 CREATE temp2 FORGET temp1 FIND temp2 FIND temp1 ( -> ) NOT ASSERT NOT ASSERT }T
-T{ ( -> ) ." Expect a message on next line..." CR }T
+." Expect a message on next line..." CR
 T{ CREATE temp1 CREATE temp1 FIND temp1 ( -> ) ASSERT }T
 T{ FORGET temp1 FIND temp1 ( -> ) ASSERT }T
 T{ FORGET temp1 FIND temp1 ( -> ) NOT ASSERT }T
@@ -373,6 +374,12 @@ ASSIGN temp1 TO-DO NOOP
 ' temp1 ( -> ) @ ' NOOP NFA = ASSERT
 temp1
 ' temp1 NFA ' NOVEC NFA DOVEC ' temp1 ( -> ) @ ' NOVEC NFA = ASSERT
+." Expect a message on next line..." CR
+1 ERR-WARN ! NOVEC 0 ERR-WARN ! ( -> )
+FORGET temp1
+: temp1 1234 ;
+ASSIGN ABORT TO-DO temp1 ABORT ( -> ) 1234 = ASSERT
+ASSIGN ABORT TO-DO (ABORT)
 FORGET temp1
 }T
 
@@ -383,7 +390,7 @@ T{ ( -> ) ?EXEC }T
 : temp1 ?COMP DROP 77 ; IMMEDIATE T{ ( -> ) 88 : temp2 temp1 ; 77 = ASSERT }T FORGET temp1
 T{ 7 7 ( -> ) ?PAIRS }T
 T{ : temp1 ?CSP ; ( -> ) temp1 }T FORGET temp1
-T{ ( -> ) ." Expect a message on next line..." CR }T
+." Expect a message on next line..." CR
 T{ ( -> ) 10 MESSAGE }T
 T{ ( -> ) 0 10 ?ERROR }T
 
@@ -494,6 +501,12 @@ VARIABLE temp1
 T{ : temp1 0 (LOCAL) local1 0 (LOCAL) local2 1234 TO local1 local1 @ 4567 TO local2 local2 @ ; temp1 ( -> ) 4567 = ASSERT 1234 = ASSERT }T FORGET temp1
 
 \
+\ Test ERR-WARN stuff
+\
+." Expect some output on next lines..." CR
+T{ 1 ERR-WARN ! 6 ERROR 0 ERR-WARN ! ( -> )  }T
+
+\
 \ Test OS stuff
 \
 T{ : temp1 " ls >/dev/null" COUNT 2DUP + 0 SWAP C! DROP OSCLI ; ( -> ) temp1 }T FORGET temp1
@@ -507,7 +520,7 @@ T{ OS-PID ( -> ) OR ASSERT }T
 \
 T{ ?LOAD" non-existent.fth" ( -> ) NOT ASSERT }T
 T{ ?LOAD" non-existent.fth" ( -> ) NOT ASSERT OSERRNO 2 = ASSERT }T
-\ T{ ?LOAD" non-existent.fth" ( -> ) NOT ASSERT OSERROR }T
+T{ ?LOAD" non-existent.fth" ( -> ) NOT ASSERT 1 ERR-WARN ! OSERROR 0 ERR-WARN ! }T
 T{ ?LOAD" empty.fth" ( -> ) ASSERT }T
 T{ : temp1 ?LOAD" empty.fth" ; ( -> ) temp1 ASSERT }T FORGET temp1
 T{ : temp1 ?LOAD" non-existent.fth" ; ( -> ) temp1 NOT ASSERT }T FORGET temp1
@@ -517,7 +530,7 @@ T{ : temp1 LOAD" empty.fth" ; ( -> ) temp1 }T FORGET temp1
 \
 \ Test output stuff
 \
-T{ ( -> ) ." Expect some output on next lines..." CR }T
+." Expect some output on next lines..." CR
 T{ 16 >R H.RS .RS R> DROP ( -> ) }T
 T{ 16 H.S .S DROP ( -> ) }T
 T{ 16 4 .R 166661. 10 D.R ( -> ) }T CR
@@ -565,6 +578,12 @@ T{ 0 SLEEP ( -> ) }T
 ' TRACE-EXECUTE NFA TC-PRETEND-EXECUTE
 ' (TRACE-EXECUTE-STACK) NFA TC-PRETEND-EXECUTE
 ' (TRACE-EXECUTE) NFA TC-PRETEND-EXECUTE
+
+' COLD NFA TC-PRETEND-EXECUTE
+' INITVECS NFA TC-PRETEND-EXECUTE
+' WARM NFA TC-PRETEND-EXECUTE
+' (ABORT) NFA TC-PRETEND-EXECUTE
+' QUIT NFA TC-PRETEND-EXECUTE
 
 \
 \ Test 1ARRAY stuff

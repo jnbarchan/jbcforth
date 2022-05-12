@@ -463,6 +463,7 @@ typedef enum primitive
   primitive_VDUMP,		// VDUMP
   primitive_VLIST,		// VLIST
   primitive_VOCABULARY,		// VOCABULARY
+  primitive_WARM,		// WARM
   primitive_WBFR,		// WBFR
   primitive_WDSZ,		// WDSZ
   primitive_WHILE,		// WHILE
@@ -654,6 +655,7 @@ PTRACEVARS g_pTRACE_VARS;
 #define user_var_BASE		(PBYTE)(pUP + 0x20)
 #define user_var_CSP		(PADDR)(pUP + 0x24)
 #define user_var_LOCALSDP	(PADDR)(pUP + 0x26)
+#define user_var_ERR_WARN	(PADDR)(pUP + 0x28)
 
 #define USER_VAR_OFFSET(user_var) ((PBYTE)(user_var) - pUP)
 
@@ -687,6 +689,8 @@ PTRACEVARS g_pTRACE_VARS;
 #define pCSP ((PBYTE)ADDR_TO_PTR(*user_var_CSP))
 // LOCALSDP:	First free byte at Top of Locals Dictionary
 #define pLOCALSDP ((PBYTE)ADDR_TO_PTR(*user_var_LOCALSDP))
+// ERR_WARN:	0 => errors are errors, 1 => errors are warnings
+#define g_bERR_WARN (*user_var_ERR_WARN)
 
 // ***************************************
 // ********** </USER VARIABLES> **********
@@ -796,6 +800,7 @@ static void forth_ERROR(FORTH_ERR_NUM err);
 static void forth_MESSAGE_WORD_NOT_FOUND(PFORTHSTRING pWord);
 static void forth_ERROR_WORD_NOT_FOUND(PFORTHSTRING pWord);
 static void forth_BRACKET_ABORT(void);
+static void forth_WARM(void);
 static void forth_INITVECS(void);
 static void forth_COLD(void);
 static void forth_EXECUTE_EXVEC(ADDR addr);
@@ -3123,6 +3128,7 @@ static void forthBootupDict(void)
   forthCreateDictEnt_user_variable("STATE", USER_VAR_OFFSET(user_var_STATE));
   forthCreateDictEnt_user_variable("BASE", USER_VAR_OFFSET(user_var_BASE));
   forthCreateDictEnt_user_variable("CSP", USER_VAR_OFFSET(user_var_CSP));
+  forthCreateDictEnt_user_variable("ERR-WARN", USER_VAR_OFFSET(user_var_ERR_WARN));
   // ---------- User Variables
 
   // ++++++++++ System Constants
@@ -3144,6 +3150,7 @@ static void forthBootupDict(void)
   forthCreateDictEnt_primitive("?ERROR", primitive_QUERY_ERROR, 0);
   forthCreateDictEnt_primitive("(ABORT)", primitive_BRACKET_ABORT, 0);
   forthCreateDictEnt_execvec("ABORT", primitive_BRACKET_ABORT);
+  forthCreateDictEnt_primitive("WARM", primitive_WARM, 0);
   forthCreateDictEnt_primitive("INITVECS", primitive_INITVECS, 0);
   forthCreateDictEnt_primitive("COLD", primitive_COLD, 0);
   // ---------- Error definitions
@@ -3610,6 +3617,14 @@ static void prim_QUERY_ERROR(void)
   if (flag)
     forth_ERROR(num);
 }
+
+// WARM
+static void prim_WARM(void)
+{
+  // longjmp into forthMAIN(), restart at COLD
+  forth_WARM();
+}
+
 
 // (ABORT)
 static void prim_BRACKET_ABORT(void)
@@ -7860,6 +7875,9 @@ static void forth_EXECUTE_PRIMITIVE(primitive_t prim)
   case primitive_VOCABULARY:		// VOCABULARY
     prim_VOCABULARY(); break;
 
+  case primitive_WARM:			// WARM
+    prim_WARM(); break;
+
   case primitive_WBFR:			// WBFR
     prim_WBFR(); break;
 
@@ -8560,6 +8578,11 @@ static void forth_OS_ERROR(void)
 {
   // is this error only a warning?
   bool isWarning = FALSE;
+  // are all errors warnings (safe check)
+  if (!g_bExitOnError)
+      if (pUP)
+          if (g_bERR_WARN)
+              isWarning = TRUE;
 
   // flush any pending output, before error message
   external_fflush(stdout);
@@ -8608,6 +8631,11 @@ static void forth_ERROR(FORTH_ERR_NUM err)
 {
   // is this error only a warning?
   bool isWarning = (err == err_NOT_UNIQUE);
+  // are all errors warnings (safe check)
+  if (!g_bExitOnError)
+      if (pUP)
+          if (g_bERR_WARN)
+              isWarning = TRUE;
 
   // flush any pending output, before error message
   external_fflush(stdout);
@@ -8691,12 +8719,6 @@ static void forth_BRACKET_ABORT(void)
 // ABORT
 static void forth_ABORT(void)
 {
-  // clear the Computation Stack
-  CLEAR_COMPUTATION_STACK();
-  // clear the Return & Backtrace Stacks
-  CLEAR_RETURN_STACK();
-  CLEAR_BACKTRACE_STACK();
-
   PFORTHDICTENT pDEAbort = forthFindDictEnt("ABORT");
   if (pDEAbort != NULL)
   {
@@ -8710,8 +8732,6 @@ static void forth_ABORT(void)
 // (WARM)
 static void forth_BRACKET_WARM(void)
 {
-  fprintf(stdout, "WARM\n");
-
   // clear the Return & Backtrace Stacks
   CLEAR_RETURN_STACK();
   CLEAR_BACKTRACE_STACK();
@@ -8721,6 +8741,13 @@ static void forth_BRACKET_WARM(void)
 
   // longjmp into forthMAIN(), restart at ABORT
   forthMAIN_longjmp(longjmp_ABORT);
+}
+
+// WARM
+static void forth_WARM(void)
+{
+  fprintf(stdout, "WARM\n");
+  forth_BRACKET_WARM();
 }
 
 // INITVECS
@@ -8758,6 +8785,8 @@ static void forth_BRACKET_COLD(void)
 
   // USER Variables region
   pUP = g_pUV;
+  // set so that forthERROR()s are errors
+  *user_var_ERR_WARN = 0;
 
   if (g_pMSB < g_pFD_HIGH)
     forth_ERROR(err_SYS_MEM);
@@ -8841,6 +8870,9 @@ static void forthMAIN(void)
   setjmp_return = setjmp(forthMAIN_jmp_buf_env);
   // set so that any error exits FORTH
   g_bExitOnError = TRUE;
+  // and set that errors are errors
+  if (pUP)
+    *user_var_ERR_WARN = 0;
   // set SIGINT (Ctrl+C) to do raise a FORTH error
   signal(SIGINT, forthSIGINT_HANDLER);
 
