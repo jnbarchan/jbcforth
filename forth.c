@@ -141,6 +141,25 @@ typedef enum cfe		// code field enum
 } CFE, *PCFE;
 typedef uint16_t CFA, *PCFA;	// code field address
 
+static const char *cfe_Names[] =	// code field enum names (for forthDumpDictEnt)
+{
+  "primitive",		// cfe_primitive
+  "create",		// cfe_create
+  "constant",		// cfe_constant
+  "double_constant",	// cfe_double_constant
+  "float_constant",	// cfe_float_constant
+  "string_constant",	// cfe_string_constant
+  "variable",		// cfe_variable
+  "double_variable",	// cfe_double_variable
+  "float_variable",	// cfe_float_variable
+  "string_variable",	// cfe_string_variable
+  "user_variable",	// cfe_user_variable
+  "local_variable",	// cfe_local_variable
+  "colon",		// cfe_colon
+  "does_gt",		// cfe_does_gt
+  "exvec",		// cfe_exvec
+};
+
 //STEP#1
 typedef enum primitive
 {
@@ -431,6 +450,9 @@ typedef enum primitive
   primitive_SP_FETCH,		// SP@
   primitive_SPACE,		// SPACE
   primitive_SPACES,		// SPACES
+  primitive_STDOUT_FLUSH,	// STDOUT-FLUSH
+  primitive_STDOUT_TO,		// STDOUT>
+  primitive_STDOUT_TO_TO,	// STDOUT>>
   primitive_STRING,		// STRING
   primitive_SWAP,		// SWAP
   primitive_TEXT,		// TEXT
@@ -595,7 +617,11 @@ static PFORTHDICTENT
   ;
 
 static void
-  *g_fspIN		// FPSIN:	Input Steam File/String Pointer (depending on value in user_var_BLK)
+  *g_fspIN		// FSPIN:	Input Stream File/String Pointer (depending on value in user_var_BLK)
+  ;
+
+static FILE
+  *g_fpOUT		// FPOUT:	Output Stream File Pointer
   ;
 
 static PSINGLE
@@ -1072,14 +1098,14 @@ static inline PADDR memafind(register PADDR pSrc, ADDR a, size_t n)
 
 static inline int forth_putc(char c)
 {
-  if (fputc(c, stdout) == EOF)
+  if (fputc(c, g_fpOUT) == EOF)
     return -1;
   return 1;
 }
 
 static inline int forth_putcount(byte count, const char *pChars)
 {
-  return fwrite(pChars, sizeof(char), count, stdout);
+  return fwrite(pChars, sizeof(char), count, g_fpOUT);
 }
 
 #pragma GCC diagnostic push
@@ -1214,7 +1240,7 @@ static int forth_ADDR_OUTPUT(ADDR addr, bool trailingBlank)
 {
   // output an address, optionally with a trailing blank
   // return number of characters output
-  int count = fprintf(stdout, "0x%04X", addr);
+  int count = fprintf(g_fpOUT, "0x%04X", addr);
   if (trailingBlank)
   {
     forth_putc(' ');
@@ -1228,7 +1254,7 @@ static int forth_FLOAT_OUTPUT(FLOAT num, bool trailingBlank)
 {
   // output a floating point, optionally with a trailing blank
   // return number of characters output
-  int count = fprintf(stdout, "%g", num);
+  int count = fprintf(g_fpOUT, "%g", num);
   if (trailingBlank)
   {
     forth_putc(' ');
@@ -1478,24 +1504,10 @@ static void forthDumpDictEnt(const PFORTHDICTENT pDE)
     fprintf(stderr, "<BAD NFA>=%p,0x%02X", &pDE->nfa, *(PBYTE)&pDE->nfa.flag);
   fprintf(stderr, "\tLFA=0x%04X", pDE->lfa);
   fprintf(stderr, "\tCFA=");
-  switch (pDE->cfa)
-  {
-  case cfe_primitive: fprintf(stderr, "primitive"); break;
-  case cfe_constant: fprintf(stderr, "constant"); break;
-  case cfe_double_constant: fprintf(stderr, "double_constant"); break;
-  case cfe_float_constant: fprintf(stderr, "float_constant"); break;
-  case cfe_string_constant: fprintf(stderr, "float_string"); break;
-  case cfe_variable: fprintf(stderr, "variable"); break;
-  case cfe_double_variable: fprintf(stderr, "double_variable"); break;
-  case cfe_float_variable: fprintf(stderr, "float_variable"); break;
-  case cfe_string_variable: fprintf(stderr, "string_variable"); break;
-  case cfe_user_variable: fprintf(stderr, "user_variable"); break;
-  case cfe_local_variable: fprintf(stderr, "local_variable"); break;
-  case cfe_colon: fprintf(stderr, "colon"); break;
-  case cfe_does_gt: fprintf(stderr, "does>"); break;
-  case cfe_exvec: fprintf(stderr, "exvec:"); break;
-  default: fprintf(stderr, "%hd", pDE->cfa); break;
-  }
+  if (pDE->cfa >= 0 && pDE->cfa < sizeof(cfe_Names) / sizeof(cfe_Names[0]))
+    fprintf(stderr, "%s", cfe_Names[pDE->cfa]);
+  else
+    fprintf(stderr, "%hd", pDE->cfa);
   fprintf(stderr, "\tPFA=0x%04X", PTR_TO_ADDR(&pDE->pfa));
   fprintf(stderr, "\n");
 }
@@ -3053,6 +3065,48 @@ static void forth_WORD(char delimiter)
 // ********** </INPUT BUFFER> **********
 // *************************************
 
+// ******************************************
+// ********** <OUTPUT REDIRECTION> **********
+// ******************************************
+
+// set so that output goes to file
+static void forthSetFileOutput(FILE *pFile)
+{
+  if (pFile == NULL)
+    forth_ERROR(err_SYS_MEM);
+  if (g_fpOUT != NULL && g_fpOUT != pFile)
+  {
+      if (g_fpOUT == stdout)
+        external_fflush(g_fpOUT);
+      else
+        external_fclose(g_fpOUT);
+  }
+  // Output Stream is going to a file
+  g_fpOUT = pFile;
+}
+
+// set so that output goes to console
+static void forthSetConsoleOutput(void)
+{
+  if (stdout == NULL)
+    forth_ERROR(err_SYS_MEM);
+  if (g_fpOUT != NULL && g_fpOUT != stdout)
+      external_fclose(g_fpOUT);
+  // Output Stream is console
+  g_fpOUT = stdout;
+}
+
+// flush any output going to file
+static void forthFlushFileOutput()
+{
+  if (g_fpOUT != NULL)
+    external_fflush(g_fpOUT);
+}
+
+// *******************************************
+// ********** </OUTPUT REDIRECTION> **********
+// *******************************************
+
 
 // *****************************************
 // ********** <BOOTUP DICTIONARY> **********
@@ -3492,6 +3546,9 @@ static void forthBootupDict(void)
   forthCreateDictEnt_primitive("(LOAD)", primitive_BRACKET_LOAD, 0);
   forthCreateDictEnt_primitive("?LOAD\"", primitive_QUERY_LOAD_QUOTE, (DICT_IMMEDIATE));
   forthCreateDictEnt_primitive("LOAD\"", primitive_LOAD_QUOTE, (DICT_IMMEDIATE));
+  forthCreateDictEnt_primitive("STDOUT-FLUSH", primitive_STDOUT_FLUSH, 0);
+  forthCreateDictEnt_primitive("STDOUT>", primitive_STDOUT_TO, 0);
+  forthCreateDictEnt_primitive("STDOUT>>", primitive_STDOUT_TO_TO, 0);
   forthCreateDictEnt_primitive("TIME", primitive_TIME, 0);
   forthCreateDictEnt_primitive("MICRO-TIME", primitive_MICRO_TIME, 0);
   forthCreateDictEnt_primitive("SLEEP", primitive_SLEEP, 0);
@@ -3703,6 +3760,7 @@ static void prim_BRACKET_ASSERT(void)
   if (SP_POP() != 0)
     return;
   external_fflush(stdout);
+  external_fflush(g_fpOUT);
   fprintf(stderr, "Assert line #%hd: ", line);
   forth_ERROR(err_ASSERT_FAIL);
 }
@@ -3722,6 +3780,7 @@ static void prim_ASSERT(void)
     if (SP_POP() != 0)
       return;
     external_fflush(stdout);
+    external_fflush(g_fpOUT);
     fprintf(stderr, "Assert line #%hd: ", forth_ERR_LINE);
     forth_ERROR(err_ASSERT_FAIL);
   }
@@ -5900,7 +5959,7 @@ static void prim_ID_DOT(void)
 {
   PFORTHDICTENT pDE = SP_POP_PTR();
   CHECK_DICT_PTR(pDE);
-  fprintf(stdout, "%s ", pDE->nfa.name);
+  fprintf(g_fpOUT, "%s ", pDE->nfa.name);
 }
 
 // VLIST
@@ -6801,6 +6860,50 @@ static void prim_LOAD_QUOTE(void)
   {
     // load and interpret the file
     forth_LOAD_INTERPRET(pWBFR->chars);
+  }
+}
+
+// STDOUT-FLUSH
+static void prim_STDOUT_FLUSH(void)
+{
+  forthFlushFileOutput();
+}
+
+// STDOUT>
+static void prim_STDOUT_TO(void)
+{
+  PFORTHSTRING pFName = SP_POP_PTR();
+  if (pFName == NULL)
+  {
+    // redirect g_fpOUT to the file
+    forthSetConsoleOutput();
+  }
+  else
+  {
+    // redirect g_fpOUT to the file
+    FILE *fp = external_fopen(pFName->chars, "w");
+    if (fp == NULL)
+      forth_OS_ERROR();
+    forthSetFileOutput(fp);
+  }
+}
+
+// STDOUT>>
+static void prim_STDOUT_TO_TO(void)
+{
+  PFORTHSTRING pFName = SP_POP_PTR();
+  if (pFName == NULL)
+  {
+    // redirect g_fpOUT to the file
+    forthSetConsoleOutput();
+  }
+  else
+  {
+    // redirect g_fpOUT to the file (for append)
+    FILE *fp = external_fopen(pFName->chars, "a");
+    if (fp == NULL)
+      forth_OS_ERROR();
+    forthSetFileOutput(fp);
   }
 }
 
@@ -7761,7 +7864,7 @@ static void forth_EXECUTE_PRIMITIVE(primitive_t prim)
   case primitive_SF_FETCH:		// SF@
     prim_SF_FETCH(); break;
 
-  case primitive_SLEEP:         // SLEEP
+  case primitive_SLEEP:			// SLEEP
     prim_SLEEP(); break;
 
   case primitive_SMUDGE:		// SMUDGE
@@ -7779,11 +7882,20 @@ static void forth_EXECUTE_PRIMITIVE(primitive_t prim)
   case primitive_SPACES:		// SPACES
     prim_SPACES(); break;
 
-  case primitive_SWAP:			// SWAP
-    prim_SWAP(); break;
+  case primitive_STDOUT_FLUSH:		// STDOUT-FLUSH
+    prim_STDOUT_FLUSH(); break;
+
+  case primitive_STDOUT_TO:		// STDOUT>
+    prim_STDOUT_TO(); break;
+
+  case primitive_STDOUT_TO_TO:		// STDOUT>>
+    prim_STDOUT_TO_TO(); break;
 
   case primitive_STRING:		// STRING
     prim_STRING(); break;
+
+  case primitive_SWAP:			// SWAP
+    prim_SWAP(); break;
 
   case primitive_TEXT:			// TEXT
     prim_TEXT(); break;
@@ -8586,6 +8698,7 @@ static void forth_OS_ERROR(void)
 
   // flush any pending output, before error message
   external_fflush(stdout);
+  external_fflush(g_fpOUT);
 
   if (g_bExitOnError)
     fprintf(stderr, "\nEXIT ");
@@ -8639,6 +8752,7 @@ static void forth_ERROR(FORTH_ERR_NUM err)
 
   // flush any pending output, before error message
   external_fflush(stdout);
+  external_fflush(g_fpOUT);
 
   // if the flag g_bExitOnError is set
   // --- which is set during COLD and during forth_ERROR, and cleared when the top-level interpreter is reached ---
@@ -8683,6 +8797,7 @@ static void forth_MESSAGE_WORD_NOT_FOUND(PFORTHSTRING pWord)
 {
   // when a word is not found, output the word and a "?"
   external_fflush(stdout);
+  external_fflush(g_fpOUT);
   fprintf(stderr, "%.*s ?\n", pWord->len, pWord->chars);
   external_fflush(stderr);
 }
@@ -8868,6 +8983,7 @@ static void forthMAIN(void)
 
   // top-level setjmp(), all longjmp()s return here
   setjmp_return = setjmp(forthMAIN_jmp_buf_env);
+
   // set so that any error exits FORTH
   g_bExitOnError = TRUE;
   // and set that errors are errors
@@ -8878,6 +8994,9 @@ static void forthMAIN(void)
 
   // clear IP from whatever it might be pointing to
   pIP = NULL;
+
+  // ensure output to console
+  forthSetConsoleOutput();
 
   switch (setjmp_return)
   {
@@ -8917,6 +9036,9 @@ static void forthMAIN(void)
   // close any open file Input Stream
   forth_FILE_IN_CLOSE();
 
+  // close any open file Output Stream
+  forthSetConsoleOutput();
+
   fprintf(stdout, "BYE\n");
 }
 
@@ -8934,6 +9056,8 @@ int main(int UNUSED(argc), char* UNUSED(argv[]))
 {
   forth_ERR_FILE = NULL;
   g_bExitOnError = TRUE;
+
+  g_fpOUT = stdout;
 
 #ifdef	SEMAPHORE
   // initialise the global semaphore

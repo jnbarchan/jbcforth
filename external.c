@@ -182,7 +182,7 @@ region of rl_line_buffer that contains the word to complete.  TEXT is
 the word to complete.  We can use the entire contents of rl_line_buffer
 in case we want to do some simple parsing.  Return the array of matches,
 or NULL if there aren't any. */
-static char **readline_forth_word_completion(const char *text, int start, int end)
+static char **readline_forth_word_completion(const char *text, int UNUSED(start), int UNUSED(end))
 {
   /* This is a Forth word to complete. */
   return rl_completion_matches(text, forth_word_generator);
@@ -236,7 +236,7 @@ static int readline_terminal_column(void)
   readline_prep_terminal(TRUE);			// put terminal into "raw" mode (immediate input, no echo)
   fputs("\033[6n", stdout);			// ANSI escape sequence <ESC>[6n to query cursor position
   int row = -1, col = -1;
-  int count = fscanf(stdin, "\033[%d;%dR", &row, &col);	// ANSI escape sequence response <ESC>[<row>;<col>R
+  int UNUSED(count) = fscanf(stdin, "\033[%d;%dR", &row, &col);	// ANSI escape sequence response <ESC>[<row>;<col>R
   readline_prep_terminal(FALSE);		// restore terminal to "cooked" mode
   return col;
 }

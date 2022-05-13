@@ -513,7 +513,7 @@ T{ : temp1 " ls >/dev/null" COUNT 2DUP + 0 SWAP C! DROP OSCLI ; ( -> ) temp1 }T 
 T{ : temp1 [ " ls  >/dev/null" COUNT 2DUP + 0 SWAP C! ] >CLI ; ( -> ) temp1 }T FORGET temp1
 T{ OS' ls >/dev/null' }T
 T{ : temp1 OS' ls >/dev/null ' ; ( -> ) temp1 }T FORGET temp1
-T{ OS-PID ( -> ) OR ASSERT }T
+T{ OS-PID ( -> ) 0. D= NOT ASSERT }T
 
 \
 \ Test LOAD file stuff
@@ -546,6 +546,23 @@ T{ ' ID. NFA ID. ( -> ) }T
 T{ SPACE 8 SPACES }T CR
 T{ 65 EMIT }T
 T{ " Hello" COUNT EMITS }T CR
+
+\
+\ Test output redirection stuff
+\
+." Expect no (visible) output" CR
+T{
+" /tmp/forth_tests_output.txt" STDOUT>
+." Hello world" CR
+STDOUT-FLUSH
+1234 . SPACE 0x1234 H. SPACE 1234. D. 6 SPACES 1234.56 F. CR
+: temp1
+  " /tmp/forth_tests_output.txt" STDOUT>>
+  ." This line APPENDED!" CR
+; temp1 FORGET temp1
+0 STDOUT>
+}T
+." End of: Expect no (visible) output" CR
 
 \
 \ Test sundry stuff

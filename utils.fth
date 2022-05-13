@@ -104,6 +104,16 @@ FORTH DEFINITIONS
     2DROP 0				( 0 )
   ;
 
+: VLIST-SORTED	( ... )
+    \ 0 2 1ARRAY names
+    LAST
+    BEGIN
+    ?DUP WHILE
+      DUP ID.
+      (FINDPREV)
+    REPEAT
+  ;
+
 \
 \ Tests
 \
