@@ -169,6 +169,7 @@ typedef enum primitive
   primitive_DOLLAR_PLUS,	// $+
   primitive_DOLLAR_COMMA,	// $,
   primitive_DOLLAR_CMP,		// $CMP
+  primitive_DOLLAR_CMPID,		// $CMPID
   primitive_DOLLAR_CONSTANT,	// $CONSTANT
   primitive_DOLLAR_INTERPRET,	// $INTERPRET
   primitive_DOLLAR_VARIABLE,	// $VARIABLE
@@ -260,6 +261,7 @@ typedef enum primitive
   primitive_QUERY_EXEC,		// ?EXEC
   primitive_QUERY_LOAD_QUOTE,	// ?LOAD"
   primitive_QUERY_PAIRS,	// ?PAIRS
+  primitive_QUERY_STACK,	// ?STACK
   primitive_FETCH,		// @
   primitive_FETCH_EXECUTE,	// @EXECUTE
   primitive_A_DOT,		// A.
@@ -867,42 +869,42 @@ static inline void CHECK_ADDR(ADDR addr) { if (!VALID_ADDR(addr)) forth_ERROR(er
 static inline void CHECK_DICT_PTR(PVOID p) { if (!VALID_DICT_PTR(p)) forth_ERROR(err_SYS_MEM); }
 static inline void CHECK_CALLER(void) { if (!VALID_DICT_PTR(pIP)) forth_ERROR(err_SYS_MEM); }
 
-static inline void CHECK_SP_FULL(PBYTE pSP) { if (pSP <= g_pCS_LOW) forth_ERROR(err_STACK_FULL); }
-static inline void CHECK_SP_EMPTY(PBYTE pSP) { if (pSP > g_pCS) forth_ERROR(err_STACK_EMPTY); }
-static inline void CHECK_SP(void) { CHECK_SP_FULL(pSP); CHECK_SP_EMPTY(pSP); }
-static inline void CHECK_SP_HAS_1(void) { CHECK_SP_EMPTY(pSP + sizeof(SINGLE)); }
-static inline void CHECK_SP_HAS_2(void) { CHECK_SP_EMPTY(pSP + sizeof(SINGLE) + sizeof(SINGLE)); }
-static inline void CHECK_SP_HAS_3(void) { CHECK_SP_EMPTY(pSP + sizeof(SINGLE) + sizeof(SINGLE) + sizeof(SINGLE)); }
-static inline void CHECK_SP_HAS_N(byte n) { CHECK_SP_EMPTY(pSP + n * sizeof(SINGLE)); }
-static inline void CHECK_SP_HAS_DOUBLE(void) { CHECK_SP_EMPTY(pSP + sizeof(DOUBLE)); }
-static inline void CHECK_SP_HAS_FLOAT(void) { CHECK_SP_EMPTY(pSP + sizeof(FLOAT)); }
+static inline void CHECK_pSP_FULL(PBYTE pSP) { if (pSP <= g_pCS_LOW) forth_ERROR(err_STACK_FULL); }
+static inline void CHECK_pSP_EMPTY(PBYTE pSP) { if (pSP > g_pCS) forth_ERROR(err_STACK_EMPTY); }
+static inline void CHECK_SP(void) { CHECK_pSP_FULL(pSP); CHECK_pSP_EMPTY(pSP); }
+static inline void CHECK_SP_HAS_1(void) { CHECK_pSP_EMPTY(pSP + sizeof(SINGLE)); }
+static inline void CHECK_SP_HAS_2(void) { CHECK_pSP_EMPTY(pSP + sizeof(SINGLE) + sizeof(SINGLE)); }
+static inline void CHECK_SP_HAS_3(void) { CHECK_pSP_EMPTY(pSP + sizeof(SINGLE) + sizeof(SINGLE) + sizeof(SINGLE)); }
+static inline void CHECK_SP_HAS_N(byte n) { CHECK_pSP_EMPTY(pSP + n * sizeof(SINGLE)); }
+static inline void CHECK_SP_HAS_DOUBLE(void) { CHECK_pSP_EMPTY(pSP + sizeof(DOUBLE)); }
+static inline void CHECK_SP_HAS_FLOAT(void) { CHECK_pSP_EMPTY(pSP + sizeof(FLOAT)); }
 
-static inline void CHECK_RP_FULL(PBYTE pRP) { if (pRP <= g_pRS_LOW) forth_ERROR(err_STACK_FULL); }
-static inline void CHECK_RP_EMPTY(PBYTE pRP) { if (pRP > g_pRS) forth_ERROR(err_STACK_EMPTY); }
-static inline void CHECK_RP(void) { CHECK_RP_FULL(pRP); CHECK_RP_EMPTY(pRP); }
-static inline void CHECK_RP_HAS_1(void) { CHECK_RP_EMPTY(pRP + sizeof(SINGLE)); }
-static inline void CHECK_RP_HAS_2(void) { CHECK_RP_EMPTY(pRP + sizeof(SINGLE) + sizeof(SINGLE)); }
-static inline void CHECK_RP_HAS_N(byte n) { CHECK_RP_EMPTY(pRP + n * sizeof(SINGLE)); }
+static inline void CHECK_pRP_FULL(PBYTE pRP) { if (pRP <= g_pRS_LOW) forth_ERROR(err_STACK_FULL); }
+static inline void CHECK_pRP_EMPTY(PBYTE pRP) { if (pRP > g_pRS) forth_ERROR(err_STACK_EMPTY); }
+static inline void CHECK_RP(void) { CHECK_pRP_FULL(pRP); CHECK_pRP_EMPTY(pRP); }
+static inline void CHECK_RP_HAS_1(void) { CHECK_pRP_EMPTY(pRP + sizeof(SINGLE)); }
+static inline void CHECK_RP_HAS_2(void) { CHECK_pRP_EMPTY(pRP + sizeof(SINGLE) + sizeof(SINGLE)); }
+static inline void CHECK_RP_HAS_N(byte n) { CHECK_pRP_EMPTY(pRP + n * sizeof(SINGLE)); }
 
-static inline void CHECK_RP_ALLOT_LOCAL(PBYTE pRP) { if (pRP > (PBYTE)pRPLOCALS) forth_ERROR(err_SYS_MEM); CHECK_RP_FULL(pRP); }
+static inline void CHECK_pRP_ALLOT_LOCAL(PBYTE pRP) { if (pRP > (PBYTE)pRPLOCALS) forth_ERROR(err_SYS_MEM); CHECK_pRP_FULL(pRP); }
 
-static inline void CHECK_BTP_FULL(PADDR pBTP) { if ((PBYTE)pBTP <= g_pBTS_LOW) forth_ERROR(err_STACK_FULL); }
-static inline void CHECK_BTP_EMPTY(PADDR pBTP) { if ((PBYTE)pBTP > g_pBTS) forth_ERROR(err_STACK_EMPTY); }
-static inline void CHECK_BTP(void) { CHECK_BTP_FULL(pBTP); CHECK_BTP_EMPTY(pBTP); }
-static inline void CHECK_BTP_HAS_1(void) { CHECK_BTP_EMPTY(pBTP + 1); }
+static inline void CHECK_pBTP_FULL(PADDR pBTP) { if ((PBYTE)pBTP <= g_pBTS_LOW) forth_ERROR(err_STACK_FULL); }
+static inline void CHECK_pBTP_EMPTY(PADDR pBTP) { if ((PBYTE)pBTP > g_pBTS) forth_ERROR(err_STACK_EMPTY); }
+static inline void CHECK_BTP(void) { CHECK_pBTP_FULL(pBTP); CHECK_pBTP_EMPTY(pBTP); }
+static inline void CHECK_BTP_HAS_1(void) { CHECK_pBTP_EMPTY(pBTP + 1); }
 
 #pragma GCC diagnostic pop
 
 #ifdef	FAST
-#define VALID_PTR(p)		(TRUE)
-#define VALID_ADDR(addr)	(TRUE)
-#define VALID_DICT_PTR(p)	(TRUE)
+//#define VALID_PTR(p)		((p) != NULL)
+//#define VALID_ADDR(addr)	((addr) != 0)
+//#define VALID_DICT_PTR(p)	((p) != NULL)
 #define CHECK_PTR(p)
 #define CHECK_ADDR(addr)
 #define CHECK_DICT_PTR(p)
 #define CHECK_CALLER()
-#define CHECK_SP_FULL(pSP)
-#define CHECK_SP_EMPTY(pSP)
+#define CHECK_pSP_FULL(pSP)
+#define CHECK_pSP_EMPTY(pSP)
 #define CHECK_SP()
 #define CHECK_SP_HAS_1()
 #define CHECK_SP_HAS_2()
@@ -910,15 +912,15 @@ static inline void CHECK_BTP_HAS_1(void) { CHECK_BTP_EMPTY(pBTP + 1); }
 #define CHECK_SP_HAS_N(n)
 #define CHECK_SP_HAS_DOUBLE()
 #define CHECK_SP_HAS_FLOAT()
-#define CHECK_RP_FULL(pRP)
-#define CHECK_RP_EMPTY(pRP)
+#define CHECK_pRP_FULL(pRP)
+#define CHECK_pRP_EMPTY(pRP)
 #define CHECK_RP()
 #define CHECK_RP_HAS_1()
 #define CHECK_RP_HAS_2()
 #define CHECK_RP_HAS_N(n)
-#define CHECK_RP_ALLOT_LOCAL(pRP)
-#define CHECK_BTP_FULL(pBTP)
-#define CHECK_BTP_EMPTY(pBTP)
+#define CHECK_pRP_ALLOT_LOCAL(pRP)
+#define CHECK_pBTP_FULL(pBTP)
+#define CHECK_pBTP_EMPTY(pBTP)
 #define CHECK_BTP()
 #define CHECK_BTP_HAS_1()
 #endif
@@ -975,21 +977,21 @@ static inline PADDR BTP_1(void) { return pBTP + 1; }
 static inline PADDR BTP_N(BYTE n) { return (pBTP + (n - 1)); }
 
 // push a single precision to the Computation Stack (SP)
-static inline void SP_PUSH(SINGLE sngl) { pSP -= sizeof(SINGLE); CHECK_SP(); *(PSINGLE)pSP = sngl; }
+static inline void SP_PUSH(SINGLE sngl) { pSP -= sizeof(SINGLE); CHECK_pSP_FULL(pSP); *(PSINGLE)pSP = sngl; }
 // pop a single precision from the Computation Stack (SP)
-static inline SINGLE SP_POP(void) { pSP += sizeof(SINGLE); CHECK_SP(); return *(((PSINGLE)pSP) - 1); }
+static inline SINGLE SP_POP(void) { pSP += sizeof(SINGLE); CHECK_pSP_EMPTY(pSP); return *(((PSINGLE)pSP) - 1); }
 // replace a single precision at the Computation Stack (SP)
 static inline void SP_REPLACE(SINGLE sngl) { CHECK_SP_HAS_1(); *(PSINGLE)pSP = sngl; }
 // push a double precision to the Computation Stack (SP)
-static inline void SP_PUSH_DOUBLE(DOUBLE dbl) { pSP -= sizeof(DOUBLE); CHECK_SP(); *(PDOUBLE)pSP = dbl; }
+static inline void SP_PUSH_DOUBLE(DOUBLE dbl) { pSP -= sizeof(DOUBLE); CHECK_pSP_FULL(pSP); *(PDOUBLE)pSP = dbl; }
 // pop a double precision from the Computation Stack (SP)
-static inline DOUBLE SP_POP_DOUBLE(void) { pSP += sizeof(DOUBLE); CHECK_SP(); return *(((PDOUBLE)pSP) - 1); }
+static inline DOUBLE SP_POP_DOUBLE(void) { pSP += sizeof(DOUBLE); CHECK_pSP_EMPTY(pSP); return *(((PDOUBLE)pSP) - 1); }
 // replace a double precision at the Computation Stack (SP)
 static inline void SP_REPLACE_DOUBLE(DOUBLE dbl) { CHECK_SP_HAS_2(); *(PDOUBLE)pSP = dbl; }
 // push an addr to the Computation Stack (SP)
-static inline void SP_PUSH_ADDR(ADDR addr) { pSP -= sizeof(ADDR); CHECK_SP(); *(PADDR)pSP = addr; }
+static inline void SP_PUSH_ADDR(ADDR addr) { pSP -= sizeof(ADDR); CHECK_pSP_FULL(pSP); *(PADDR)pSP = addr; }
 // pop an addr from the Computation Stack (SP)
-static inline ADDR SP_POP_ADDR(void) { pSP += sizeof(ADDR); CHECK_SP(); return *(((PADDR)pSP) - 1); }
+static inline ADDR SP_POP_ADDR(void) { pSP += sizeof(ADDR); CHECK_pSP_EMPTY(pSP); return *(((PADDR)pSP) - 1); }
 // replace an addr at the Computation Stack (SP)
 static inline void SP_REPLACE_ADDR(ADDR addr) { CHECK_SP_HAS_1(); *(PADDR)pSP = addr; }
 // push a C pointer to the Computation Stack (SP)
@@ -999,15 +1001,15 @@ static inline PVOID SP_POP_PTR(void) { return ADDR_TO_PTR(SP_POP_ADDR()); }
 // replace a C pointer at the Computation Stack (SP)
 static inline void SP_REPLACE_PTR(PVOID p) { SP_REPLACE_ADDR(PTR_TO_ADDR(p)); }
 // push a float to the Computation Stack (SP)
-static inline void SP_PUSH_FLOAT(FLOAT flt) { pSP -= sizeof(FLOAT); CHECK_SP(); *(PFLOAT)pSP = flt; }
+static inline void SP_PUSH_FLOAT(FLOAT flt) { pSP -= sizeof(FLOAT); CHECK_pSP_FULL(pSP); *(PFLOAT)pSP = flt; }
 // pop a float from the Computation Stack (SP)
-static inline FLOAT SP_POP_FLOAT(void) { pSP += sizeof(FLOAT); CHECK_SP(); return *(((PFLOAT)pSP) - 1); }
+static inline FLOAT SP_POP_FLOAT(void) { pSP += sizeof(FLOAT); CHECK_pSP_EMPTY(pSP); return *(((PFLOAT)pSP) - 1); }
 // replace a float at the Computation Stack (SP)
 static inline void SP_REPLACE_FLOAT(FLOAT flt) { CHECK_SP_HAS_2(); *(PFLOAT)pSP = flt; }
 // push a float to the Computation Stack (SP)
-static inline void SP_PUSH_SMALLFLOAT(SMALLFLOAT flt) { pSP -= sizeof(SMALLFLOAT); CHECK_SP(); *(PSMALLFLOAT)pSP = flt; }
+static inline void SP_PUSH_SMALLFLOAT(SMALLFLOAT flt) { pSP -= sizeof(SMALLFLOAT); CHECK_pSP_FULL(pSP); *(PSMALLFLOAT)pSP = flt; }
 // pop a float from the Computation Stack (SP)
-static inline SMALLFLOAT SP_POP_SMALLFLOAT(void) { pSP += sizeof(SMALLFLOAT); CHECK_SP(); return *(((PSMALLFLOAT)pSP) - 1); }
+static inline SMALLFLOAT SP_POP_SMALLFLOAT(void) { pSP += sizeof(SMALLFLOAT); CHECK_pSP_EMPTY(pSP); return *(((PSMALLFLOAT)pSP) - 1); }
 // replace a float at the Computation Stack (SP)
 static inline void SP_REPLACE_SMALLFLOAT(SMALLFLOAT smlflt) { CHECK_SP_HAS_2(); *(PSMALLFLOAT)pSP = smlflt; }
 
@@ -1031,11 +1033,11 @@ static inline FLOAT RP_POP_FLOAT(void) { pRP += sizeof(FLOAT); CHECK_RP(); retur
 static inline void RP_REPLACE_FLOAT(FLOAT flt) { CHECK_RP_HAS_1(); *(PFLOAT)pRP = flt; }
 
 // allocate LOCAL variable storage on Return Stack (RP)
-static inline void RP_ALLOT_LOCAL(PBYTE pRPNew) { CHECK_RP_ALLOT_LOCAL(pRPNew); if (pRPNew < pRP) pRP = pRPNew; }
+static inline void RP_ALLOT_LOCAL(PBYTE pRPNew) { CHECK_pRP_ALLOT_LOCAL(pRPNew); if (pRPNew < pRP) pRP = pRPNew; }
 // allocate a single precision LOCAL variable at index on Return Stack (RP)
 static inline void RP_ALLOT_LOCAL_VAR(SINGLE index) { RP_ALLOT_LOCAL((PBYTE)(pRPLOCALS - (index + 1))); }
 // pointer to single precision LOCAL variable at index on Return Stack (RP)
-static inline PSINGLE RP_LOCAL_VAR(SINGLE index) { CHECK_RP_ALLOT_LOCAL(((PBYTE)(pRPLOCALS - (index + 1)))); return pRPLOCALS - (index + 1); }
+static inline PSINGLE RP_LOCAL_VAR(SINGLE index) { CHECK_pRP_ALLOT_LOCAL(((PBYTE)(pRPLOCALS - (index + 1)))); return pRPLOCALS - (index + 1); }
 
 // push an ADDR to the Backtrace Stack (BTP)
 static inline void BTP_PUSH(ADDR addr) { pBTP--; CHECK_BTP(); *pBTP = addr; }
@@ -3202,6 +3204,7 @@ static void forthBootupDict(void)
   forthCreateDictEnt_primitive("OSERROR", primitive_OS_ERROR, 0);
   forthCreateDictEnt_primitive("ERROR", primitive_ERROR, 0);
   forthCreateDictEnt_primitive("?ERROR", primitive_QUERY_ERROR, 0);
+  forthCreateDictEnt_primitive("?STACK", primitive_QUERY_STACK, 0);
   forthCreateDictEnt_primitive("(ABORT)", primitive_BRACKET_ABORT, 0);
   forthCreateDictEnt_execvec("ABORT", primitive_BRACKET_ABORT);
   forthCreateDictEnt_primitive("WARM", primitive_WARM, 0);
@@ -3353,6 +3356,7 @@ static void forthBootupDict(void)
   forthCreateDictEnt_primitive("BLANKS", primitive_BLANKS, 0);
   forthCreateDictEnt_primitive("MEMCMP", primitive_MEMCMP, 0);
   forthCreateDictEnt_primitive("$CMP", primitive_DOLLAR_CMP, 0);
+  forthCreateDictEnt_primitive("$CMPID", primitive_DOLLAR_CMPID, 0);
   forthCreateDictEnt_primitive("MEMDUMP", primitive_MEMDUMP, 0);
   forthCreateDictEnt_primitive("MEMDUMPW", primitive_MEMDUMP_W, 0);
   // ---------- Store/Fetch definitions
@@ -3675,13 +3679,22 @@ static void prim_QUERY_ERROR(void)
     forth_ERROR(num);
 }
 
+// ?STACK
+static void prim_QUERY_STACK(void)
+{
+  // must not use CHECK_SP() in case compiled FAST
+  if (pSP <= g_pCS_LOW)
+    forth_ERROR(err_STACK_FULL);
+  if (pSP > g_pCS)
+    forth_ERROR(err_STACK_EMPTY);
+}
+
 // WARM
 static void prim_WARM(void)
 {
   // longjmp into forthMAIN(), restart at COLD
   forth_WARM();
 }
-
 
 // (ABORT)
 static void prim_BRACKET_ABORT(void)
@@ -4940,13 +4953,32 @@ static void prim_DOLLAR_CMP(void)
 {
   PFORTHSTRING pStr2 = SP_POP_PTR();
   PFORTHSTRING pStr1 = SP_POP_PTR();
-  byte minlen = (pStr1->len < pStr2->len) ? pStr1->len : pStr2->len;
+  int len1 = pStr1->len, len2 = pStr2->len;
+  byte minlen = (len1 < len2) ? len1 : len2;
   SINGLE cmp = memcmp(pStr1->chars, pStr2->chars, minlen);
   if (cmp == 0)
   {
-    if (pStr1->len > pStr2->len)
+    if (len1 > len2)
       cmp = (unsigned char)pStr1->chars[minlen];
-    else if (pStr2->len > pStr1->len)
+    else if (len2 > len1)
+      cmp = -(unsigned char)pStr2->chars[minlen];
+  }
+  SP_PUSH(cmp);
+}
+
+// $CMPID
+static void prim_DOLLAR_CMPID(void)
+{
+  PFORTHSTRING pStr2 = SP_POP_PTR();
+  PFORTHSTRING pStr1 = SP_POP_PTR();
+  int len1 = (pStr1->len & 0x1F), len2 = (pStr2->len & 0x1F);
+  byte minlen = (len1 < len2) ? len1 : len2;
+  SINGLE cmp = memcmp(pStr1->chars, pStr2->chars, minlen);
+  if (cmp == 0)
+  {
+    if (len1 > len2)
+      cmp = (unsigned char)pStr1->chars[minlen];
+    else if (len2 > len1)
       cmp = -(unsigned char)pStr2->chars[minlen];
   }
   SP_PUSH(cmp);
@@ -5836,7 +5868,7 @@ static void prim_LAST(void)
 // DEFINITIONS
 static void prim_DEFINITIONS(void)
 {
-  VALID_DICT_PTR(ADDR_TO_PTR(pCONTEXT->top_dictent));
+  CHECK_DICT_PTR(ADDR_TO_PTR(pCONTEXT->top_dictent));
   // set CURRENT Vocabulary to CONTEXT
   *user_var_CURRENT = *user_var_CONTEXT;
 }
@@ -7039,6 +7071,9 @@ static void forth_EXECUTE_PRIMITIVE(primitive_t prim)
   case primitive_DOLLAR_CMP:		// $CMP
     prim_DOLLAR_CMP(); break;
 
+  case primitive_DOLLAR_CMPID:		// $CMPID
+    prim_DOLLAR_CMPID(); break;
+
   case primitive_DOLLAR_CONSTANT:	// $CONSTANT
     prim_DOLLAR_CONSTANT(); break;
 
@@ -7311,6 +7346,9 @@ static void forth_EXECUTE_PRIMITIVE(primitive_t prim)
 
   case primitive_QUERY_PAIRS:		// ?PAIRS
     prim_QUERY_PAIRS(); break;
+
+  case primitive_QUERY_STACK:		// ?STACK
+    prim_QUERY_STACK(); break;
 
   case primitive_FETCH:			// @
     prim_FETCH(); break;

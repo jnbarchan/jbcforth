@@ -30,6 +30,7 @@ FORTH DEFINITIONS
   ; IMMEDIATE
 
 : MEMSWAP	( addr1\addr2\count ... )
+    \ swap count bytes addr2<->addr2
     >R
     DUP HERE R@ CMOVE
     2DUP R@ CMOVE
@@ -104,14 +105,31 @@ FORTH DEFINITIONS
     2DROP 0				( 0 )
   ;
 
+\
+\ VLIST with output sorted alphabetically
+\
+: IS-BLANK-DICT-ID	( addr ... f )
+    \ is the dictionary id/name at addr a "dummy, blank" one (first word in a Vocabulary)
+    COUNT 0x1F AND 1 = SWAP C@ 32 = AND
+  ;
 : VLIST-SORTED	( ... )
-    \ 0 2 1ARRAY names
-    LAST
+    " " (LOCAL) lastdone 0 (LOCAL) nextfound 0 (LOCAL) found
     BEGIN
-    ?DUP WHILE
-      DUP ID.
-      (FINDPREV)
+      " ~~~" nextfound ! 0 found !
+      LAST
+      BEGIN
+      ?DUP WHILE
+        DUP COUNT 0x1F AND 1 = SWAP C@ 32 = AND NOT IF
+          DUP lastdone @ $CMPID 0>
+          OVER nextfound @ $CMPID 0<
+          AND IF DUP nextfound ! 1 found ! THEN
+        THEN
+        (FINDPREV)
+      REPEAT
+      found @ IF nextfound @ DUP lastdone ! ID. THEN
+    found @ WHILE
     REPEAT
+    CR
   ;
 
 \

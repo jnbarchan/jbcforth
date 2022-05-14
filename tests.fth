@@ -114,6 +114,7 @@ INIT-TC-ARRAY
 
 \ Start of a Test
 R: T{
+    ?STACK
     ' T{			( push marker for T{ )
     INTERPRET" ASSIGN TRACE-EXECUTE TO-DO TC-EXECUTE"
     [COMPILE] TRACEON
@@ -124,6 +125,7 @@ R: T{
 : }T
     [COMPILE] TRACEOFF
     ' T{ ?PAIRS			( verify marker for T{ )
+    ?STACK
   ;
 
 \ Effective value to use for DEPTH during T{ to exclude the T{ effect
@@ -135,6 +137,9 @@ R: T{
 0 ERR-WARN !
 SP! RP!
 FORTH tests DEFINITIONS
+
+DVARIABLE run-tests-time
+TIME run-tests-time D!
 
 \
 \ Test T{ & }T
@@ -218,6 +223,7 @@ T{ :NONAME 1234 ; nn1 ! ( -> ) }T
 T{ :NONAME 9876 ; nn2 ! ( -> ) }T
 T{ nn1 @ EXECUTE ( -> ) 1234 = ASSERT }T
 T{ nn2 @EXECUTE ( -> ) 9876 = ASSERT }T
+FORGET nn2 FORGET nn1
 
 \
 \ Test :INLINE
@@ -245,6 +251,7 @@ T{ :INLINE [ 0x1234 ] ALITERAL ;INLINE ( -> ) 0x1234 = ASSERT }T
 \
 \ Test stack stuff
 \
+T{ ?STACK ( -> ) }T
 T{ ( -> ) T{DEPTH 0= ASSERT DEPTH 1 = ASSERT }T
 T{ >R SP! ( -> ) SP@ S0 @ = ASSERT R> }T
 T{ 1 2 3 ( -> ) T{DEPTH 3 = ASSERT 3 = ASSERT 2 = ASSERT 1 = ASSERT }T
@@ -624,15 +631,18 @@ T{
 T{
 26 7 1ARRAY temp1
 :INLINE 26 0 DO " ABCDEF" I temp1 7 CMOVE I temp1 4 + I 3 - SWAP C+! LOOP ;INLINE
-: temp2 $CMP ;
+: temp2 $CMPID ;
 ' temp1 NFA ' temp2 NFA " ABCYEZ" 1ARRAY-BINARY-SEARCH ( -> ) 0= ASSERT
 ' temp1 NFA ' temp2 NFA " ABCYEF" 1ARRAY-BINARY-SEARCH ( -> ) 24 temp1 = ASSERT
 FORGET temp2
-: temp2 $CMP NEGATE ;
+: temp2 $CMPID NEGATE ;
 ' temp1 NFA ' temp2 NFA " ABCYEF" 1ARRAY-BINARY-SEARCH ( -> ) 0= ASSERT
 ' temp1 NFA ' temp2 NFA 1ARRAY-BUBBLE-SORT
 ' temp1 NFA ' temp2 NFA " ABCYEF" 1ARRAY-BINARY-SEARCH ( -> ) 1 temp1 = ASSERT
 }T FORGET temp2 FORGET temp1
+
+T{ " (FIND)" CONTEXT @ @ (FIND) ( -> ) ASSERT DROP IS-BLANK-DICT-ID NOT ASSERT }T
+T{ "  " CONTEXT @ @ (FIND) ( -> ) ASSERT 1 = ASSERT DUP IS-BLANK-DICT-ID ASSERT (FINDPREV) ' tests NFA = ASSERT }T
 
 \
 \ Test random.fth stuff
@@ -665,3 +675,4 @@ FIND play ?DUP [IF] TC-PRETEND-EXECUTE [THEN]
 \ All done!
 \
 ." Tests run to completion" CR
+TIME run-tests-time D@ D- D. ." seconds" CR
