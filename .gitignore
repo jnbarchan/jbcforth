@@ -47,6 +47,9 @@ Makefile*
 # Temporary files from vi
 *.swp
 
+# Executable file
+forth
+
 # Core dump file
 core
 
