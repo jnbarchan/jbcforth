@@ -24,6 +24,7 @@
 #include "defs.h"
 
 extern int external_errno(void);
+extern const char *external_strerror(int errnum);
 extern void external_perror(const char *__s);
 
 extern void *external_malloc(size_t __size);

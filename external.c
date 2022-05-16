@@ -25,6 +25,11 @@ extern int external_errno(void)
   return errno;
 }
 
+extern const char *external_strerror(int errnum)
+{
+  return strerror(errnum);
+}
+
 extern void external_perror(const char *__s)
 {
   perror(__s);

@@ -683,7 +683,8 @@ PTRACEVARS g_pTRACE_VARS;
 #define user_var_BASE		(PBYTE)(pUP + 0x20)
 #define user_var_CSP		(PADDR)(pUP + 0x24)
 #define user_var_LOCALSDP	(PADDR)(pUP + 0x26)
-#define user_var_ERR_WARN	(PADDR)(pUP + 0x28)
+#define user_var_ERRNUM		(PADDR)(pUP + 0x28)
+#define user_var_ERR_WARN	(PADDR)(pUP + 0x30)
 
 #define USER_VAR_OFFSET(user_var) ((PBYTE)(user_var) - pUP)
 
@@ -717,6 +718,8 @@ PTRACEVARS g_pTRACE_VARS;
 #define pCSP ((PBYTE)ADDR_TO_PTR(*user_var_CSP))
 // LOCALSDP:	First free byte at Top of Locals Dictionary
 #define pLOCALSDP ((PBYTE)ADDR_TO_PTR(*user_var_LOCALSDP))
+// ERRNUM:	Last forth_ERROR() error number
+#define g_bERRNUM (*user_var_ERRNUM)
 // ERR_WARN:	0 => errors are errors, 1 => errors are warnings
 #define g_bERR_WARN (*user_var_ERR_WARN)
 
@@ -731,37 +734,37 @@ PTRACEVARS g_pTRACE_VARS;
 
 typedef enum forth_err_num
 {
-  err_0,
-  err_STACK_EMPTY,
-  err_DICT_FULL,
-  err_BAD_ADDR_MODE,
-  err_NOT_UNIQUE,
-  err_BAD_PARAM,
-  err_BAD_SCR_NUM,
-  err_STACK_FULL,
-  err_BAD_FILE,
-  err_READ_WRITE,
-  err_REDEFINE_EOL,
-  err_DIV_0,
-  err_BAD_EXVEC,
-  err_BAD_BRANCH,
-  err_BAD_CURRENT_VOCAB,
-  err_15,
-  err_16,
-  err_COMPILATION_ONLY,
-  err_EXECUTION_ONLY,
-  err_COND_NOT_PAIRED,
-  err_DEF_INCOMPLETE,
-  err_PROTECTED_DICT,
-  err_LOAD_ONLY,
-  err_OFF_EDIT_SCR,
-  err_NOT_IN_CURRENT_VOCAB,
-  err_SYS_MEM,
-  err_NOT_IMPLEMENTED,
-  err_INTERRUPT,
-  err_DICT_NAME_EMPTY,
-  err_DICT_NAME_LEN,
-  err_ASSERT_FAIL,
+  err_0,			/* 0 */
+  err_STACK_EMPTY,		/* 1 */
+  err_DICT_FULL,		/* 2 */
+  err_BAD_ADDR_MODE,		/* 3 */
+  err_NOT_UNIQUE,		/* 4 */
+  err_BAD_PARAM,		/* 5 */
+  err_BAD_SCR_NUM,		/* 6 */
+  err_STACK_FULL,		/* 7 */
+  err_BAD_FILE,			/* 8 */
+  err_READ_WRITE,		/* 9 */
+  err_REDEFINE_EOL,		/* 10 */
+  err_DIV_0,			/* 11 */
+  err_BAD_EXVEC,		/* 12 */
+  err_BAD_BRANCH,		/* 13 */
+  err_BAD_CURRENT_VOCAB,	/* 14 */
+  err_15,			/* 15 */
+  err_16,			/* 16 */
+  err_COMPILATION_ONLY,		/* 17 */
+  err_EXECUTION_ONLY,		/* 18 */
+  err_COND_NOT_PAIRED,		/* 19 */
+  err_DEF_INCOMPLETE,		/* 20 */
+  err_PROTECTED_DICT,		/* 21 */
+  err_LOAD_ONLY,		/* 22 */
+  err_OFF_EDIT_SCR,		/* 23 */
+  err_NOT_IN_CURRENT_VOCAB,	/* 24 */
+  err_SYS_MEM,			/* 25 */
+  err_NOT_IMPLEMENTED,		/* 26 */
+  err_INTERRUPT,		/* 27 */
+  err_DICT_NAME_EMPTY,		/* 28 */
+  err_DICT_NAME_LEN,		/* 29 */
+  err_ASSERT_FAIL,		/* 30 */
 } FORTH_ERR_NUM;
 
 const char *FORTH_ERR_MSG[] =
@@ -1179,7 +1182,10 @@ static char forth_NEXT_DIGIT(BYTE base, DOUBLE num, bool asUnsigned)
 {
   // return the the least-significant "digit" of a number in the specified base
   if (base < 2 || base > 16)
+  {
     forth_ERROR(err_BAD_PARAM);
+    return '\0';
+  }
   byte digit = asUnsigned ? ((UDOUBLE)num) % base : (num < 0 ? -num : num) % base;
   char c = (digit <= 9) ? '0' + digit : 'A' + digit - 10;
   return c;
@@ -1272,7 +1278,10 @@ static int forth_DIGIT(BYTE base, register char c)
   // return the digit as a number
   // -1 => invalid
   if (base < 2 || base > 16)
+  {
     forth_ERROR(err_BAD_PARAM);
+    return -1;
+  }
   register int num = -1;
   if (c >= '0' && c <= '9')
     num = c - '0';
@@ -1413,7 +1422,10 @@ static void forth_NUMBER(const PFORTHSTRING pWord)
   // leave the resulting number on the Computation Stack
   // error if valid numeric conversion not possible
   if (!forth_NUM(pWord))
+  {
     forth_ERROR(err_BAD_PARAM);
+    return;
+  }
 }
 
 // ************************************
@@ -1676,7 +1688,10 @@ static void forthIncreaseTopDictEnt(PFORTHDICTENT pDETop)
 {
   CHECK_DICT_PTR(pDETop);
   if (pDETop <= pLAST)
+  {
     forth_ERROR(err_BAD_PARAM);
+    return;
+  }
   // set pLAST
   pLAST = pDETop;
   // set pCURRENT
@@ -1695,7 +1710,10 @@ static void forthPruneDictEnt(PFORTHDICTENT pDEForget)
   CHECK_DICT_PTR(pDEForget);
   // cannot PRUNE below FENCE
   if (pDEForget < pFENCE)
+  {
     forth_ERROR(err_PROTECTED_DICT);
+    return;
+  }
   // walk down VOC-LINK while it is on or above pDEForget
   while ((PBYTE)pVOC_LINK >= (PBYTE)pDEForget)
     *user_var_VOC_LINK = pVOC_LINK->voc_link;
@@ -1716,7 +1734,10 @@ static void forthDecreaseTopDictEnt(PFORTHDICTENT pDEForget)
   // ensure it's a valid Dictionary Entry
   CHECK_DICT_PTR(pDEForget);
   if (pDEForget > pLAST)
+  {
     forth_ERROR(err_BAD_PARAM);
+    return;
+  }
   // walk down all Vocabularies via VOC-LINK
   // as any of them may have Dictionary Entries on or above pDEForget
   // while doing so, set pLAST to highest remaining Dictionary Entry encountered
@@ -1743,7 +1764,10 @@ static void forthForgetDictEnt(PFORTHDICTENT pDE)
   CHECK_DICT_PTR(pDE);
   // cannot FORGET below FENCE
   if (pDE < pFENCE)
+  {
     forth_ERROR(err_PROTECTED_DICT);
+    return;
+  }
   // first cut off any Vocabulary links which extend beyond this
   // may set pCONTEXT = pCURRENT = pVOC_LINK = pVOC_LINK->voc_link
   forthPruneDictEnt(pDE);
@@ -1766,21 +1790,32 @@ static void forthForgetLastDictEnt(void)
 }
 
 // raise an error if the LAST FORTHDICTENT *is* incomplete
-static void forthCheckCompleteLastDictEnt(void)
+static bool forthCheckCompleteLastDictEnt(void)
 {
   if (pLAST == NULL)
-    return;
+    return TRUE;
   if (pLAST->nfa.flag.smudge)
+  {
     forth_ERROR(err_DEF_INCOMPLETE);
+    return FALSE;
+  }
+  return TRUE;
 }
 
 // raise an error if the LAST FORTHDICTENT is *not* incomplete
-static void forthCheckIncompleteLastDictEnt(void)
+static bool forthCheckIncompleteLastDictEnt(void)
 {
   if (pLAST == NULL)
+  {
     forth_ERROR(err_SYS_MEM);
+    return FALSE;
+  }
   if (!pLAST->nfa.flag.smudge)
+  {
     forth_ERROR(err_COMPILATION_ONLY);
+    return FALSE;
+  }
+  return TRUE;
 }
 
 // allocate bytes at pLOCALSDP
@@ -1789,9 +1824,15 @@ static void forthLocalsDictAllot(SINGLE numBytes)
   // pLOCALSDP is current first free byte at top of LOCALs Dictionary
   PBYTE pLOCALSDPNew = pLOCALSDP + numBytes;
   if (pLOCALSDPNew >= g_pLOCALSD_HIGH)
+  {
     forth_ERROR(err_DICT_FULL);
+    return;
+  }
   else if (pLOCALSDPNew < pLOCALSDP0)
+  {
     forth_ERROR(err_SYS_MEM);
+    return;
+  }
   *user_var_LOCALSDP = PTR_TO_ADDR(pLOCALSDPNew);
 }
 
@@ -1801,9 +1842,15 @@ static void forthDictAllot(SINGLE numBytes)
   // pDP is current first free byte at top of Dictionary
   PBYTE pDPNew = pDP + numBytes;
   if (pDPNew >= pFIRST)
+  {
     forth_ERROR(err_DICT_FULL);
+    return;
+  }
   else if (pDPNew < pDP0)
+  {
     forth_ERROR(err_SYS_MEM);
+    return;
+  }
   *user_var_DP = PTR_TO_ADDR(pDPNew);
 }
 
@@ -1929,14 +1976,21 @@ static void forthCreateDictEnt(const FORTHDICTNAME pDictName, CFE cfe)
   // current top-most Dictionary Entry for Definitions
   PFORTHDICTENT pDETop = forthCurrentDictEnt();
   // error if there is presently an incomplete Dictionary Entry
-  forthCheckCompleteLastDictEnt();
+  if (!forthCheckCompleteLastDictEnt())
+    return;
 
   // look at the name to be defined
   byte len = strlen(pDictName);
   if (len == 0)
+  {
     forth_ERROR(err_DICT_NAME_EMPTY);
+    return;
+  }
   else if (len > MAX_DICT_NAME_LEN)
+  {
     forth_ERROR(err_DICT_NAME_LEN);
+    return;
+  }
 
   // issue *warning* message if this redefines an existing word
   if (!forthDictEntIsBlankName(pDictName))
@@ -1945,9 +1999,15 @@ static void forthCreateDictEnt(const FORTHDICTNAME pDictName, CFE cfe)
 
   // pDP is current first free byte at top of Dictionary
   if (pDP + 256 >= pFIRST)
+  {
     forth_ERROR(err_DICT_FULL);
+    return;
+  }
   else if (pDP < pDP0)
+  {
     forth_ERROR(err_SYS_MEM);
+    return;
+  }
   // we like Dictionary Entry aligned to an ADDR boundary
   ADDR addr = PTR_TO_ADDR(pDP);
   OFFSET pad = ((addr + sizeof(ADDR) - 1) / sizeof(ADDR) * sizeof(ADDR)) - addr;
@@ -2125,16 +2185,25 @@ static void forthCreateDictEnt_local_variable(const FORTHDICTNAME pDictName)
 {
   // Compilation mode only
   if (!COMPILATION_MODE())
+  {
     forth_ERROR(err_COMPILATION_ONLY);
+    return;
+  }
 
   // create new LOCALs Dictionary Entry, move pLOCALSDP up to end, increment g_LOCALSINDEX
 
   // look at the name to be defined
   byte len = strlen(pDictName);
   if (len == 0)
+  {
     forth_ERROR(err_DICT_NAME_EMPTY);
+    return;
+  }
   else if (len > MAX_DICT_NAME_LEN)
+  {
     forth_ERROR(err_DICT_NAME_LEN);
+    return;
+  }
 
   // issue *warning* message if this redefines an existing word
   if (forthFindDictEnt(pDictName) != NULL)
@@ -2142,9 +2211,15 @@ static void forthCreateDictEnt_local_variable(const FORTHDICTNAME pDictName)
 
   // pLOCALSDP is current first free byte at top of LOCALs Dictionary
   if (pLOCALSDP + 50 >= g_pLOCALSD_HIGH)
+  {
     forth_ERROR(err_DICT_FULL);
+    return;
+  }
   else if (pLOCALSDP < pLOCALSDP0)
+  {
     forth_ERROR(err_SYS_MEM);
+    return;
+  }
   // we like Dictionary Entry aligned to an ADDR boundary
   ADDR addr = PTR_TO_ADDR(pLOCALSDP);
   OFFSET pad = ((addr + sizeof(ADDR) - 1) / sizeof(ADDR) * sizeof(ADDR)) - addr;
@@ -2191,10 +2266,14 @@ static void forthCreateDictEnt_colon(const FORTHDICTNAME pDictName)
 static void forthCompleteDictEnt_colon()
 {
   // check that the LAST definition is indeed incomplete
-  forthCheckIncompleteLastDictEnt();
+  if (!forthCheckIncompleteLastDictEnt())
+    return;
   // and that it is indeed a Colon or Does> Definition
   if (pLAST->cfa != cfe_colon && pLAST->cfa != cfe_does_gt)
+  {
     forth_ERROR(err_COMPILATION_ONLY);
+    return;
+  }
 
   // compile into the definition the end-of-colon-list EXIT marker
   forthDictStoreAddr(PFA_ADDR_EXIT);
@@ -2254,7 +2333,10 @@ static void forth_INITVEC(const FORTHDICTNAME pDictName, primitive_t prim)
   PFORTHDICTENT pDEAssign = forthFindDictEnt(pDictName);
   // check it was created via EXVEC:
   if (!VALID_DICT_PTR(pDEAssign) || pDEAssign->cfa != cfe_exvec)
+  {
     forth_ERROR(err_BAD_EXVEC);
+    return;
+  }
   // find Dictionary Entry TO-DO
   PFORTHDICTENT pDEToDo = forthFindDictEntPrimitive(prim);
 
@@ -3185,6 +3267,7 @@ static void forthBootupDict(void)
   forthCreateDictEnt_user_variable("BASE", USER_VAR_OFFSET(user_var_BASE));
   forthCreateDictEnt_user_variable("CSP", USER_VAR_OFFSET(user_var_CSP));
   forthCreateDictEnt_user_variable("ERR-WARN", USER_VAR_OFFSET(user_var_ERR_WARN));
+  forthCreateDictEnt_user_variable("ERRNUM", USER_VAR_OFFSET(user_var_ERRNUM));
   // ---------- User Variables
 
   // ++++++++++ System Constants
@@ -3735,7 +3818,10 @@ static void prim_COLD(void)
 static void prim_QUERY_PAIRS(void)
 {
   if (SP_POP() != SP_POP())
+  {
     forth_ERROR(err_COND_NOT_PAIRED);
+    return;
+  }
 }
 
 // ?CSP
@@ -3743,7 +3829,10 @@ static void prim_QUERY_CSP(void)
 {
   // verify that pSP == pCSP, for Compiler Security
   if (pSP != pCSP)
+  {
     forth_ERROR(err_COND_NOT_PAIRED);
+    return;
+  }
 }
 
 // ?COMP
@@ -3751,7 +3840,10 @@ static void prim_QUERY_COMP(void)
 {
   // error if not in Compilation Mode
   if (!COMPILATION_MODE())
+  {
     forth_ERROR(err_COMPILATION_ONLY);
+    return;
+  }
 }
 
 // ?EXEC
@@ -3759,7 +3851,10 @@ static void prim_QUERY_EXEC(void)
 {
   // error if not in Execution Mode
   if (!EXECUTION_MODE())
+  {
     forth_ERROR(err_EXECUTION_ONLY);
+    return;
+  }
 }
 
 // (ASSERT)
@@ -4035,18 +4130,26 @@ static void prim_SUBTRACT(void)
 static void prim_DIVIDE(void)
 {
   SINGLE num2 = SP_POP();
+  SINGLE num1 = SP_POP();
   if (num2 == 0)
+  {
     forth_ERROR(err_DIV_0);
-  SP_REPLACE(*SP_0() / num2);
+    return;
+  }
+  SP_PUSH(num1 / num2);
 }
 
 // MOD
 static void prim_MOD(void)
 {
   SINGLE num2 = SP_POP();
+  SINGLE num1 = SP_POP();
   if (num2 == 0)
+  {
     forth_ERROR(err_DIV_0);
-  SP_REPLACE(*SP_0() % num2);
+    return;
+  }
+  SP_PUSH(num1 % num2);
 }
 
 // /MOD
@@ -4055,7 +4158,10 @@ static void prim_DIVIDE_MOD(void)
   SINGLE num2 = SP_POP();
   SINGLE num1 = SP_POP();
   if (num2 == 0)
+  {
     forth_ERROR(err_DIV_0);
+    return;
+  }
   SP_PUSH(num1 % num2);
   SP_PUSH(num1 / num2);
 }
@@ -4067,7 +4173,10 @@ static void prim_TIMES_DIVIDE(void)
   SINGLE num2 = SP_POP();
   SINGLE num1 = SP_POP();
   if (num3 == 0)
+  {
     forth_ERROR(err_DIV_0);
+    return;
+  }
   SP_PUSH((DOUBLE)num1 * num2 / num3);
 }
 
@@ -4078,7 +4187,10 @@ static void prim_TIMES_DIVIDE_MOD(void)
   SINGLE num2 = SP_POP();
   SINGLE num1 = SP_POP();
   if (num3 == 0)
+  {
     forth_ERROR(err_DIV_0);
+    return;
+  }
   SP_PUSH((DOUBLE)num1 * num2 % num3);
   SP_PUSH((DOUBLE)num1 * num2 / num3);
 }
@@ -4304,9 +4416,13 @@ static void prim_D_PLUS(void)
 static void prim_D_DIVIDE(void)
 {
   DOUBLE num2 = SP_POP_DOUBLE();
+  DOUBLE num1 = SP_POP_DOUBLE();
   if (num2 == 0)
+  {
     forth_ERROR(err_DIV_0);
-  SP_REPLACE_DOUBLE(*SP_DOUBLE_0() / num2);
+    return;
+  }
+  SP_PUSH_DOUBLE(num1 / num2);
 }
 
 // D/MOD
@@ -4383,9 +4499,12 @@ static void prim_U_DIVIDE(void)
 static void prim_U_DIVIDE_MOD(void)
 {
   USINGLE num2 = SP_POP();
-  if (num2 == 0)
-    forth_ERROR(err_DIV_0);
   UDOUBLE num1 = SP_POP_DOUBLE();
+  if (num2 == 0)
+  {
+    forth_ERROR(err_DIV_0);
+    return;
+  }
   SP_PUSH((USINGLE)(num1 % num2));
   SP_PUSH((USINGLE)(num1 / num2));
 }
@@ -4415,9 +4534,13 @@ static void prim_F_SUBTRACT(void)
 static void prim_F_DIVIDE(void)
 {
   FLOAT num2 = SP_POP_FLOAT();
+  FLOAT num1 = SP_POP_FLOAT();
   if (num2 == 0.0)
+  {
     forth_ERROR(err_DIV_0);
-  SP_REPLACE_FLOAT(*SP_FLOAT_0() / num2);
+    return;
+  }
+  SP_PUSH_FLOAT(num1 / num2);
 }
 
 // F->D
@@ -4813,7 +4936,10 @@ static void prim_STRING(void)
 {
   char c = SP_POP();
   if (c == '\0' || isspace(c))
+  {
     forth_ERROR(err_BAD_PARAM);
+    return;
+  }
   forth_WORD(c);
   SP_PUSH_PTR(pWBFR->chars);
   SP_PUSH(pWBFR->len);
@@ -4878,7 +5004,10 @@ static void prim_DASH_TRAILING(void)
   CHECK_SP_HAS_2();
   SINGLE num = *SP_0();
   if (num < 0)
+  {
     forth_ERROR(err_BAD_PARAM);
+    return;
+  }
   const char *pChars = ADDR_TO_PTR(*SP_1());
   while (num > 0 && isspace(pChars[num - 1]))
     num--;
@@ -4900,7 +5029,10 @@ static void prim_BRACKET_DOLLAR_PLUS(void)
   BYTE count = SP_POP();
   char *pChars = SP_POP_PTR();
   if (pStr->len + count > 255)
+  {
     forth_ERROR(err_BAD_PARAM);
+    return;
+  }
   memcpy(pStr->chars + pStr->len, pChars, count);
   pStr->len += count;
   pStr->chars[pStr->len] = '\0';
@@ -4925,7 +5057,10 @@ static void prim_DOLLAR_PLUS(void)
   PFORTHMAXLENSTRING pMLStr = (PFORTHMAXLENSTRING)(((PBYTE)pStr) - 1);
   BYTE count = *SP_1();
   if (pStr->len + count > pMLStr->maxlen)
+  {
     forth_ERROR(err_BAD_PARAM);
+    return;
+  }
   prim_BRACKET_DOLLAR_PLUS();
 }
 
@@ -4944,7 +5079,10 @@ static void prim_DOLLAR_STORE(void)
   PFORTHMAXLENSTRING pMLStr = (PFORTHMAXLENSTRING)(((PBYTE)pStr) - 1);
   BYTE count = *SP_1();
   if (count > pMLStr->maxlen)
+  {
     forth_ERROR(err_BAD_PARAM);
+    return;
+  }
   prim_BRACKET_DOLLAR_STORE();
 }
 
@@ -5339,7 +5477,10 @@ static void prim_BRACKET_THEN(void)
   // pop the primitive_BRACKET_IF left by [IF]/[ELSE]
   primitive_t prim = RP_POP();
   if (prim != primitive_BRACKET_IF && prim != primitive_BRACKET_ELSE)
+  {
     forth_ERROR(err_COND_NOT_PAIRED);
+    return;
+  }
 }
 
 // [ELSE]
@@ -5348,7 +5489,10 @@ static void prim_BRACKET_ELSE(void)
   // pop the primitive_BRACKET_IF left by [IF]
   primitive_t prim = RP_POP();
   if (prim != primitive_BRACKET_IF)
+  {
     forth_ERROR(err_COND_NOT_PAIRED);
+    return;
+  }
   // push primitive_BRACKET_ELSE, for [THEN] to find
   RP_PUSH(primitive_BRACKET_ELSE);
   // skip through the Input Stream till [THEN]
@@ -5453,7 +5597,10 @@ static void prim_IF(void)
 {
   // Compilation Mode only
   if (!COMPILATION_MODE())
+  {
     forth_ERROR(err_COMPILATION_ONLY);
+    return;
+  }
   // Compile 0BRANCH into Dictionary
   forthDictStoreFindPrimitive(primitive_ZERO_BRANCH);
   // get BACK to pop a temporary ADDR (IF's HERE) from stack and compile offset into Dictionary
@@ -5472,11 +5619,17 @@ static void prim_ELSE(void)
 {
   // Compilation Mode only
   if (!COMPILATION_MODE())
+  {
     forth_ERROR(err_COMPILATION_ONLY);
+    return;
+  }
   // pop the primitive_IF from the stack, left by IF
   primitive_t prim = SP_POP();
   if (prim != primitive_IF)
+  {
     forth_ERROR(err_COND_NOT_PAIRED);
+    return;
+  }
   // pop the ADDR left by IF (IF's HERE) from the stack
   // this is where the offset following IF's 0BRANCH was stored
   PADDR pIf = SP_POP_PTR();
@@ -5510,11 +5663,17 @@ static void prim_THEN(void)
 {
   // Compilation Mode only
   if (!COMPILATION_MODE())
+  {
     forth_ERROR(err_COMPILATION_ONLY);
+    return;
+  }
   // pop the primitive_IF from the stack, left by IF/ELSE
   primitive_t prim = SP_POP();
   if (prim != primitive_IF && prim != primitive_ELSE)
+  {
     forth_ERROR(err_COND_NOT_PAIRED);
+    return;
+  }
   // pop the ADDR left by IF/ELSE (IF/ELSE's HERE) from the stack
   // this is where the offset following IF's 0BRANCH/ELSE's BRANCH was stored
   PADDR pIfElse = SP_POP_PTR();
@@ -5535,7 +5694,10 @@ static void prim_BEGIN(void)
 {
   // Compilation Mode only
   if (!COMPILATION_MODE())
+  {
     forth_ERROR(err_COMPILATION_ONLY);
+    return;
+  }
   // pDP is current first free byte at top of Dictionary
   PADDR pHere = (PADDR)pDP;
   // push BEGIN's HERE to the stack, followed by primitive_BEGIN, for AGAIN/UNTIL/WHILE/REPEAT to find
@@ -5548,11 +5710,17 @@ static void prim_AGAIN(void)
 {
   // Compilation Mode only
   if (!COMPILATION_MODE())
+  {
     forth_ERROR(err_COMPILATION_ONLY);
+    return;
+  }
   // pop the primitive_BEGIN from the stack, left by BEGIN
   primitive_t prim = SP_POP();
   if (prim != primitive_BEGIN)
+  {
     forth_ERROR(err_COND_NOT_PAIRED);
+    return;
+  }
   // Compile BRANCH into Dictionary
   forthDictStoreFindPrimitive(primitive_BRANCH);
   // get BACK to pop BEGIN's HERE from stack and compile offset into Dictionary
@@ -5564,11 +5732,17 @@ static void prim_UNTIL(void)
 {
   // Compilation Mode only
   if (!COMPILATION_MODE())
+  {
     forth_ERROR(err_COMPILATION_ONLY);
+    return;
+  }
   // pop the primitive_BEGIN from the stack, left by BEGIN
   primitive_t prim = SP_POP();
   if (prim != primitive_BEGIN)
+  {
     forth_ERROR(err_COND_NOT_PAIRED);
+    return;
+  }
   // Compile 0BRANCH into Dictionary
   forthDictStoreFindPrimitive(primitive_ZERO_BRANCH);
   // get BACK to pop BEGIN's HERE from stack and compile offset into Dictionary
@@ -5580,11 +5754,17 @@ static void prim_WHILE(void)
 {
   // Compilation Mode only
   if (!COMPILATION_MODE())
+  {
     forth_ERROR(err_COMPILATION_ONLY);
+    return;
+  }
   // check for the primitive_BEGIN from the stack, left by BEGIN
   primitive_t prim = *SP_0();
   if (prim != primitive_BEGIN)
+  {
     forth_ERROR(err_COND_NOT_PAIRED);
+    return;
+  }
   // Compile 0BRANCH into Dictionary
   forthDictStoreFindPrimitive(primitive_ZERO_BRANCH);
   // get BACK to pop a temporary ADDR (WHILE's HERE) from stack and compile offset into Dictionary
@@ -5603,11 +5783,17 @@ static void prim_REPEAT(void)
 {
   // Compilation Mode only
   if (!COMPILATION_MODE())
+  {
     forth_ERROR(err_COMPILATION_ONLY);
+    return;
+  }
   // pop the primitive_WHILE from the stack, left by WHILE
   primitive_t prim = SP_POP();
   if (prim != primitive_WHILE)
+  {
     forth_ERROR(err_COND_NOT_PAIRED);
+    return;
+  }
   // pop the ADDR left by WHILE (WHILE's HERE) from the stack
   // this is where the offset following WHILE's 0BRANCH was stored
   // save this up for use later on
@@ -5617,7 +5803,10 @@ static void prim_REPEAT(void)
   // pop the primitive_BEGIN from the stack, left by BEGIN
   prim = SP_POP();
   if (prim != primitive_BEGIN)
+  {
     forth_ERROR(err_COND_NOT_PAIRED);
+    return;
+  }
   // Compile BRANCH into Dictionary
   forthDictStoreFindPrimitive(primitive_BRANCH);
   // get BACK to pop BEGIN's HERE from stack and compile offset into Dictionary
@@ -5759,7 +5948,10 @@ static void prim_DO(void)
 {
   // Compilation Mode only
   if (!COMPILATION_MODE())
+  {
     forth_ERROR(err_COMPILATION_ONLY);
+    return;
+  }
   // Compile (DO) into Dictionary
   forthDictStoreFindPrimitive(primitive_BRACKET_DO);
   // pDP is current first free byte at top of Dictionary
@@ -5782,11 +5974,17 @@ static void prim_PLUS_LOOP(void)
 {
   // Compilation Mode only
   if (!COMPILATION_MODE())
+  {
     forth_ERROR(err_COMPILATION_ONLY);
+    return;
+  }
   // pop the primitive_DO from the stack, left by DO
   primitive_t prim = SP_POP();
   if (prim != primitive_DO)
+  {
     forth_ERROR(err_COND_NOT_PAIRED);
+    return;
+  }
   // Compile (LOOP) into Dictionary
   forthDictStoreFindPrimitive(primitive_BRACKET_PLUS_LOOP);
   // get BACK to pop DO's HERE from stack and compile offset into Dictionary
@@ -5798,11 +5996,17 @@ static void prim_LOOP(void)
 {
   // Compilation Mode only
   if (!COMPILATION_MODE())
+  {
     forth_ERROR(err_COMPILATION_ONLY);
+    return;
+  }
   // pop the primitive_DO from the stack, left by DO
   primitive_t prim = SP_POP();
   if (prim != primitive_DO)
+  {
     forth_ERROR(err_COND_NOT_PAIRED);
+    return;
+  }
   // Compile (LOOP) into Dictionary
   forthDictStoreFindPrimitive(primitive_BRACKET_LOOP);
   // get BACK to pop DO's HERE from stack and compile offset into Dictionary
@@ -5814,11 +6018,17 @@ static void prim_U_LOOP(void)
 {
   // Compilation Mode only
   if (!COMPILATION_MODE())
+  {
     forth_ERROR(err_COMPILATION_ONLY);
+    return;
+  }
   // pop the primitive_DO from the stack, left by DO
   primitive_t prim = SP_POP();
   if (prim != primitive_DO)
+  {
     forth_ERROR(err_COND_NOT_PAIRED);
+    return;
+  }
   // Compile (ULOOP) into Dictionary
   forthDictStoreFindPrimitive(primitive_BRACKET_U_LOOP);
   // get BACK to pop DO's HERE from stack and compile offset into Dictionary
@@ -5897,7 +6107,10 @@ static void prim_VOCABULARY(void)
 {
   // verify in Execution Mode
   if (!EXECUTION_MODE())
+  {
     forth_ERROR(err_EXECUTION_ONLY);
+    return;
+  }
   // get the next word as the Dictionary Entry name
   forth_WORD(' ');
   // create a Colon Definition
@@ -6094,7 +6307,10 @@ static void prim_BRACKET_FORGET(void)
 {
   PFORTHDICTENT pDE = SP_POP_PTR();
   if (pDE == NULL)
+  {
     forth_ERROR(err_NOT_IN_CURRENT_VOCAB);
+    return;
+  }
   forthForgetDictEnt(pDE);
 }
 
@@ -6105,7 +6321,10 @@ static void prim_DASH_FORGET(void)
   PFORTHSTRING pStr = SP_POP_PTR();
   PFORTHDICTENT pDE = forthFindDictEntFrom(pDEFrom, pStr->chars, pStr->len);
   if (pDE == NULL)
+  {
     forth_ERROR(err_NOT_IN_CURRENT_VOCAB);
+    return;
+  }
   forthForgetDictEnt(pDE);
 }
 
@@ -6116,7 +6335,10 @@ static void prim_FORGET(void)
   forth_WORD(' ');
   PFORTHDICTENT pDE = forthFindDictEnt(pWBFR->chars);
   if (pDE == NULL)
+  {
     forth_ERROR(err_NOT_IN_CURRENT_VOCAB);
+    return;
+  }
   forthForgetDictEnt(pDE);
 }
 
@@ -6170,16 +6392,21 @@ static void vect_CREATE(void)
 static void prim_NOVEC(void)
 {
   forth_ERROR(err_BAD_EXVEC);
+  return;
 }
 
 // DOES>
 static void prim_DOES_GREATER(void)
 {
   // error if pLAST is presently an incomplete Dictionary Entry
-  forthCheckCompleteLastDictEnt();
+  if (!forthCheckCompleteLastDictEnt())
+    return;
   // make sure it is a Create Definition
   if (pLAST == NULL || pLAST->cfa != cfe_create)
+  {
     forth_ERROR(err_COMPILATION_ONLY);
+    return;
+  }
   // change it to a Does> Definition
   pLAST->cfa = cfe_does_gt;
   // Compile address of this Dictionary Entry's DOES> into definition
@@ -6225,7 +6452,10 @@ static void prim_DOVEC(void)
   CHECK_DICT_PTR(pDEAssign);
   // check that it was created via EXVEC:
   if (pDEAssign->cfa != cfe_exvec)
+  {
     forth_ERROR(err_BAD_EXVEC);
+    return;
+  }
   // set ASSIGNed Dictionary Entry TO-DO Dictionary Entry
   pDEAssign->pfa.addrs[0] = PTR_TO_ADDR(pDEToDo);
 }
@@ -6238,7 +6468,10 @@ static void prim_ASSIGN(void)
   PFORTHDICTENT pDE = forthMustFindDictEntForWord(pWBFR);
   // check it was created via EXVEC:
   if (pDE->cfa != cfe_exvec)
+  {
     forth_ERROR(err_BAD_EXVEC);
+    return;
+  }
   // push the ADDR of the Dictionary Entry for TO-DO to pick up
   SP_PUSH_PTR(pDE);
 }
@@ -6398,7 +6631,10 @@ static void prim_BRACKET_LOCAL(void)
 {
   // Compilation Mode only
   if (!COMPILATION_MODE())
+  {
     forth_ERROR(err_COMPILATION_ONLY);
+    return;
+  }
   // get the next word as the local variable's Dictionary Entry name
   forth_WORD(' ');
   SINGLE index = g_LOCALSINDEX;
@@ -6467,7 +6703,10 @@ static void prim_COLON(void)
 {
   // verify in Execution Mode
   if (!EXECUTION_MODE())
+  {
     forth_ERROR(err_EXECUTION_ONLY);
+    return;
+  }
   // call CREATE
   vect_CREATE();
   // change Dictionary Entry's CFA to cfe_colon
@@ -6489,7 +6728,10 @@ static void prim_COLON_NONAME(void)
 {
   // verify in Execution Mode
   if (!EXECUTION_MODE())
+  {
     forth_ERROR(err_EXECUTION_ONLY);
+    return;
+  }
   // create a dummy/blank Colon Definition
   forthCreateDictEnt_colon(" ");
   // push the Execution Token to the Stack now
@@ -6520,8 +6762,11 @@ static void prim_LEFT_BRACKET(void)
 {
   // Compilation Mode only
   if (!COMPILATION_MODE())
+  {
     forth_ERROR(err_COMPILATION_ONLY);
-  // return to Excution Mode
+    return;
+  }
+  // return to Execution Mode
   SET_EXECUTION_MODE();
 }
 
@@ -6530,7 +6775,10 @@ static void prim_RIGHT_BRACKET(void)
 {
   // verify in Execution Mode
   if (!EXECUTION_MODE())
+  {
     forth_ERROR(err_EXECUTION_ONLY);
+    return;
+  }
   // return to Compilation Mode
   SET_COMPILATION_MODE();
 }
@@ -6540,7 +6788,10 @@ static void prim_BRACKET_COMPILE(void)
 {
   // Compilation Mode only
   if (!COMPILATION_MODE())
+  {
     forth_ERROR(err_COMPILATION_ONLY);
+    return;
+  }
   // get the next word as the Dictionary Entry name
   forth_WORD(' ');
   PFORTHDICTENT pDE = forthMustFindDictEntForWord(pWBFR);
@@ -6574,13 +6825,19 @@ static void prim_SEMI_COLON(void)
 {
   // Compilation Mode only
   if (!COMPILATION_MODE())
+  {
     forth_ERROR(err_COMPILATION_ONLY);
+    return;
+  }
   // verify that pSP == pCSP, for Compiler Security
   if (pSP != pCSP)
+  {
     forth_ERROR(err_COND_NOT_PAIRED);
+    return;
+  }
   // complete the colon definition
   forthCompleteDictEnt_colon();
-  // return to Excution Mode
+  // return to Execution Mode
   SET_EXECUTION_MODE();
 }
 
@@ -8085,7 +8342,10 @@ static void forth_EXECUTE_LOCAL_VAR(SINGLE index)
 {
   // Compilation Mode only
   if (!COMPILATION_MODE())
+  {
     forth_ERROR(err_COMPILATION_ONLY);
+    return;
+  }
   // Compile (LOCALVAR) into Dictionary
   forthDictStoreFindPrimitive(primitive_BRACKET_LOCALVAR);
   // store index into Dictionary
@@ -8266,7 +8526,10 @@ static void forth_DEBUG_EXECUTE_DICTENT(const PADDR pADDR, bool *pDebug_suspend_
   }
   // verify input/output is Terminal
   if (!external_isatty(external_fileno(stdin)) || !external_isatty(external_fileno(stdout)))
+  {
     forth_ERROR(err_BAD_PARAM);
+    return;
+  }
   // output the Colon Definition, highlighting the execution point
   forthDecompileDictEnt(pDEColon, pADDR);
   external_fflush(stdout);
@@ -8523,7 +8786,10 @@ static void forth_INTERPRET(void)
 	else if (pSPOld - pSP == sizeof(FLOAT))
 	  prim_F_LITERAL();
 	else
+    {
 	  forth_ERROR(err_BAD_PARAM);
+      return;
+    }
       }
     }
 
@@ -8730,9 +8996,9 @@ static void forth_OS_ERROR(void)
   bool isWarning = FALSE;
   // are all errors warnings (safe check)
   if (!g_bExitOnError)
-      if (pUP)
-          if (g_bERR_WARN)
-              isWarning = TRUE;
+    if (pUP)
+      if (g_bERR_WARN)
+        isWarning = TRUE;
 
   // flush any pending output, before error message
   external_fflush(stdout);
@@ -8747,9 +9013,10 @@ static void forth_OS_ERROR(void)
     if (pNFA != NULL)
       fprintf(stderr, "? %s ", pNFA->name);
   }
-  fprintf(stderr, "OS ERROR # %d ", external_errno());
+  fprintf(stderr, "OS ERROR # %d", external_errno());
+  fprintf(stderr, " (%s)", external_strerror(external_errno()));
   forth_SHOW_ERR_FILE_LINE();
-  external_perror(NULL);
+  fprintf(stderr, "\n");
   if (g_bExitOnError)
   {
     // exit with error
@@ -8782,11 +9049,20 @@ static void forth_ERROR(FORTH_ERR_NUM err)
 {
   // is this error only a warning?
   bool isWarning = (err == err_NOT_UNIQUE);
+  // set last error number
+  if (pUP)
+    *user_var_ERRNUM = err;
   // are all errors warnings (safe check)
   if (!g_bExitOnError)
-      if (pUP)
-          if (g_bERR_WARN)
-              isWarning = TRUE;
+    if (pUP)
+    {
+      // ASSERTs always cause all errors to be errors
+      // and err_SYS_MEMs are too hard to handle so also unconditional error
+      if (err == err_ASSERT_FAIL || err == err_SYS_MEM)
+        *user_var_ERR_WARN = 0;
+      else if (g_bERR_WARN)
+        isWarning = TRUE;
+    }
 
   // flush any pending output, before error message
   external_fflush(stdout);
@@ -8814,6 +9090,12 @@ static void forth_ERROR(FORTH_ERR_NUM err)
     // clear the Return & Backtrace Stacks
     CLEAR_RETURN_STACK();
     CLEAR_BACKTRACE_STACK();
+  }
+  else
+  {
+    // have to clear the Computation Stack at least for forth_MESSAGE()
+    if (err == err_STACK_EMPTY || err == err_STACK_FULL)
+      CLEAR_COMPUTATION_STACK();
   }
 
   // call MESSAGE to print the standard error message
@@ -8938,8 +9220,10 @@ static void forth_BRACKET_COLD(void)
 
   // USER Variables region
   pUP = g_pUV;
-  // set so that forthERROR()s are errors
+  // set so that forth_ERROR()s are errors
   *user_var_ERR_WARN = 0;
+  // clear last error number
+  *user_var_ERRNUM = 0;
 
   if (g_pMSB < g_pFD_HIGH)
     forth_ERROR(err_SYS_MEM);
@@ -9024,9 +9308,13 @@ static void forthMAIN(void)
 
   // set so that any error exits FORTH
   g_bExitOnError = TRUE;
-  // and set that errors are errors
   if (pUP)
+  {
+    // set that errors are errors
     *user_var_ERR_WARN = 0;
+    // clear last error number
+    *user_var_ERRNUM = 0;
+  }
   // set SIGINT (Ctrl+C) to do raise a FORTH error
   signal(SIGINT, forthSIGINT_HANDLER);
 

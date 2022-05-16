@@ -308,6 +308,7 @@ T{ : temp1 1234 ; temp1 ( -> ) 1234 = ASSERT }T FORGET temp1
 T{ R: temp1 [ LAST C@ 5 = ASSERT ] R; LAST C@ 5 = ASSERT ' temp1 ( -> ) ASSERT }T FORGET temp1
 T{ R: temp1 DUP IF 1- temp1 THEN R; 4 temp1 ( -> ) 0= ASSERT }T FORGET temp1
 T{ : temp1 [ SMUDGE ] DUP IF 1- temp1 THEN [ SMUDGE ] ; 4 temp1 ( -> ) 0= ASSERT }T FORGET temp1
+T{ CREATE 123456789012345678901234567890 ( -> ) }T FORGET 123456789012345678901234567890
 
 \
 \ Test Vocabulary stuff
@@ -511,7 +512,48 @@ T{ : temp1 0 (LOCAL) local1 0 (LOCAL) local2 1234 TO local1 local1 @ 4567 TO loc
 \ Test ERR-WARN stuff
 \
 ." Expect some output on next lines..." CR
-T{ 1 ERR-WARN ! 6 ERROR 0 ERR-WARN ! ( -> )  }T
+T{ 1 ERR-WARN ! 6 ERROR 0 ERR-WARN ! ( -> ) }T
+
+\
+\ Test generating errors
+\
+T{
+1 ERR-WARN ! 0 ERRNUM !
+( error #0 ) WORD-NOT-FOUND ( -> ) ERRNUM @ 0= ASSERT
+( error #1 ) DROP DROP ( -> ) ?STACK ERRNUM @ 1 = ASSERT ' T{
+( error #2 ) CREATE temp1 0x7FFF DUP ALLOT ALLOT ( -> ) ERRNUM @ 2 = ASSERT FORGET temp1
+\ ( error #3 ) 3 ERROR ( -> ) ERRNUM @ 3 = ASSERT
+( error #4 ) CREATE temp1 CREATE temp1 ( -> ) ERRNUM @ 4 = ASSERT FORGET temp1 FORGET temp1
+( error #5 ) " ABC" NUMBER ( -> ) ERRNUM @ 5 = ASSERT
+\ ( error #6 ) 6 ERROR ( -> ) ERRNUM @ 6 = ASSERT
+}T
+( error #7 ) 0 ERRNUM ! :INLINE 200 0 DO I SP@ 6 = IF I I I EXIT THEN LOOP ;INLINE ( -> ) ?STACK ERRNUM @ 7 = ASSERT
+T{
+( error #8 ) LOAD" non-existent.fth" ( -> ) ERRNUM @ 8 = ASSERT
+\ ( error #9 ) 9 ERROR ( -> ) ERRNUM @ 9 = ASSERT
+\ ( error #10 ) 10 ERROR ( -> ) ERRNUM @ 10 = ASSERT
+( error #11 ) 1 0 / ( -> ) ERRNUM @ 11 = ASSERT
+( error #12 ) : temp1 ; ASSIGN temp1 ( -> ) ERRNUM @ 12 = ASSERT FORGET temp1
+\ ( error #13 ) 13 ERROR ( -> ) ERRNUM @ 13 = ASSERT
+\ ( error #14 ) 14 ERROR ( -> ) ERRNUM @ 14 = ASSERT
+\ ( error #15 ) 15 ERROR ( -> ) ERRNUM @ 15 = ASSERT
+\ ( error #16 ) 16 ERROR ( -> ) ERRNUM @ 16 = ASSERT
+( error #17 ) IF ( -> ) ERRNUM @ 17 = ASSERT
+( error #18 ) : temp1 : ; IMMEDIATE : temp2 temp1 ; ( -> ) ERRNUM @ 18 = ASSERT FORGET temp1
+( error #19 ) : temp1 1 IF ; ( -> ) [ ( ] ) ERRNUM @ 19 = ASSERT 2DROP SMUDGE FORGET temp1
+( error #20 ) : temp1 [ CREATE temp2 ( -> ) ERRNUM @ 20 = ASSERT FORGET temp1
+( error #21 ) FORGET FORGET ( -> ) ERRNUM @ 21 = ASSERT
+\ ( error #22 ) 22 ERROR ( -> ) ERRNUM @ 22 = ASSERT
+\ ( error #23 ) 23 ERROR ( -> ) ERRNUM @ 23 = ASSERT
+( error #24 ) FORGET non-existent ( -> ) ERRNUM @ 24 = ASSERT
+\ ( error #25 ) 25 ERROR ( -> ) ERRNUM @ 25 = ASSERT
+\ ( error #26 ) 26 ERROR ( -> ) ERRNUM @ 26 = ASSERT
+\ ( error #27 ) 27 ERROR ( -> ) ERRNUM @ 27 = ASSERT
+( error #28 ) INTERPRET" CREATE" ( -> ) ERRNUM @ 28 = ASSERT
+( error #29 ) CREATE 1234567890123456789012345678901 ( -> ) ERRNUM @ 29 = ASSERT
+\ ( error #30 ) 30 ERROR ( -> ) ERRNUM @ 30 = ASSERT
+0 ERR-WARN ! 0 ERRNUM !
+}T
 
 \
 \ Test OS stuff
