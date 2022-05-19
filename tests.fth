@@ -281,7 +281,7 @@ T{ 60000. -70. ( -> ) D/MOD -857. D= ASSERT 10. D= ASSERT }T
 T{ 9. 8. 9. 10. ( -> ) D< ASSERT D< NOT ASSERT }T
 T{ 5 6 2DUP 2DUP ( -> ) AND 4 = ASSERT OR 7 = ASSERT XOR 3 = ASSERT }T
 CREATE temp1 9 C, T{ ( -> ) temp1 7 TOGGLE temp1 C@ 14 = ASSERT }T FORGET temp1
-VARIABLE temp1 T{ 9 temp1 ! ( -> ) temp1 1+! 5 temp1 +! temp1 @ 15 = ASSERT }T FORGET temp1
+VARIABLE temp1 T{ 9 temp1 ! ( -> ) temp1 1+! 5 temp1 +! temp1 @ 15 = ASSERT temp1 1-! temp1 @ 14 = ASSERT  }T FORGET temp1
 T{ PI ( -> ) F->SF SF->F 3.14159265359 F->SF SF->F F= ASSERT }T
 T{ PI FDUP F->D 2DUP D->S ( -> ) 3 = ASSERT 3. D= ASSERT PI F= ASSERT }T
 T{ 1.1 2.2 F+ -3.3 F- 2.0 F* 0.5 F/ FDUP FDROP ( -> ) 26.4 F= ASSERT }T
@@ -412,7 +412,7 @@ T{ CREATE temp1 9. D, ( -> ) temp1 D@ 9. D= ASSERT FORGET temp1 }T
 T{ FVARIABLE temp1 ( -> ) temp1 F@ 0.0 F= ASSERT 9.0 temp1 F! temp1 F@ 9.0 F= ASSERT FORGET temp1 }T
 T{ CREATE temp1 9.0 F, ( -> ) temp1 F@ 9.0 F= ASSERT FORGET temp1 }T
 T{ CREATE temp1 0 C, ( -> ) temp1 C@ 0= ASSERT 9 temp1 C! temp1 C@ 9 = ASSERT FORGET temp1 }T
-T{ CREATE temp1 65 C, ( -> ) temp1 C1+! temp1 C@ 66 = ASSERT 10 temp1 C+! temp1 C@ 76 = ASSERT FORGET temp1 }T
+T{ CREATE temp1 65 C, ( -> ) temp1 C1+! temp1 C@ 66 = ASSERT temp1 C1-! temp1 C@ 65 = ASSERT 10 temp1 C+! temp1 C@ 75 = ASSERT FORGET temp1 }T
 T{ CREATE temp1 0.0 F->SF SF, ( -> ) temp1 SF@ SF->F 0.0 F= ASSERT 9.0 F->SF temp1 SF! temp1 SF@ SF->F 9.0 F= ASSERT FORGET temp1 }T
 T{ 9 CONSTANT temp1 ( -> ) temp1 9 = ASSERT FORGET temp1 }T
 T{ 9. DCONSTANT temp1 ( -> ) temp1 9. D= ASSERT FORGET temp1 }T
@@ -617,7 +617,8 @@ STDOUT-FLUSH
 \ Test sundry stuff
 \
 T{ TIME ( -> ) TIME D- -1 D+- 2DUP 0. D= >R 1. D= R> OR ASSERT  }T
-T{ MICRO-TIME ( -> ) 2DROP }T
+T{ MICRO-TIME ( -> ) 2DROP 2DROP }T
+T{ MICRO-TIME MICRO-TIME MICRO-TIME-DIFF ( -> ) 1000. D< ASSERT }T
 T{ 0 SLEEP ( -> ) }T
 
 \
@@ -694,12 +695,16 @@ T{ 100 RND ( -> ) 75 = ASSERT (RND-SEED) @ 24697 = ASSERT }T
 T{ :INLINE 100 0 DO 6 RND DUP -1 > SWAP 6 < AND ASSERT LOOP ;INLINE ( -> ) }T
 T{ TIME D->S (SRND) }T
 T{
-25 2 1ARRAY temp1
-:INLINE 25 0 DO (RND) I temp1 ! LOOP ;INLINE
-: temp2 @ SWAP @ SWAP - ;
-' temp1 NFA ' temp2 NFA 1ARRAY-BUBBLE-SORT
-:INLINE 25 1- 0 DO I temp1 DUP @ SWAP 2+ @ ( -> ) > NOT ASSERT LOOP ;INLINE
-}T FORGET temp2 FORGET temp1
+25 CONSTANT temp0
+temp0 2 2DUP 1ARRAY temp1 1ARRAY temp2
+:INLINE 25 0 DO (RND) I 2DUP temp1 ! temp2 ! LOOP ;INLINE
+: temp3 @ SWAP @ SWAP - ;
+' temp1 NFA ' temp3 NFA 1ARRAY-BUBBLE-SORT
+:INLINE temp0 1- 0 DO I temp1 DUP @ SWAP 2+ @ ( -> ) > NOT ASSERT LOOP ;INLINE
+' temp2 NFA ' temp3 NFA 1ARRAY-SELECTION-SORT
+:INLINE temp0 1- 0 DO I temp2 DUP @ SWAP 2+ @ ( -> ) > NOT ASSERT LOOP ;INLINE
+}T FORGET temp3 FORGET temp2 FORGET temp1 FORGET temp0
+
 T{ 1000 CALC-PI ( -> ) FDUP F>R 3.0 F< NOT R>F 3.3 F< AND ASSERT }T
 
 ' MEMW-REPEAT NFA TC-PRETEND-EXECUTE

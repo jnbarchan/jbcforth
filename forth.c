@@ -235,6 +235,7 @@ typedef enum primitive
   primitive_1_PLUS,		// 1+
   primitive_1_PLUS_STORE,	// 1+!
   primitive_1_MINUS,		// 1-
+  primitive_1_MINUS_STORE,	// 1-!
   primitive_2_PLUS,		// 2+
   primitive_2_MINUS,		// 2-
   primitive_2_TIMES,		// 2*
@@ -288,6 +289,7 @@ typedef enum primitive
   primitive_C_QUESTION_MARK,	// C?
   primitive_C_FETCH,		// C@
   primitive_C_1_PLUS_STORE,	// C1+!
+  primitive_C_1_MINUS_STORE,	// C1-!
   primitive_CASE_INSENSITIVE,	// CASE-INSENSITIVE
   primitive_CASE_SENSITIVE,	// CASE-SENSITIVE
   primitive_CFA,		// CFA
@@ -2978,7 +2980,6 @@ static SINGLE forth_KEYBOARD_QUERY(const char *prompt, bool addHistory)
   if (pTIB == NULL || pIBUF != pTIB)
     forth_ERROR(err_SYS_MEM);
 
-  external_fflush(stdin);
   external_fflush(stdout);
   external_fflush(stderr);
 
@@ -3341,6 +3342,7 @@ static void forthBootupDict(void)
   forthCreateDictEnt_primitive("+", primitive_PLUS, 0);
   forthCreateDictEnt_primitive("+!", primitive_PLUS_STORE, 0);
   forthCreateDictEnt_primitive("1+!", primitive_1_PLUS_STORE, 0);
+  forthCreateDictEnt_primitive("1-!", primitive_1_MINUS_STORE, 0);
   forthCreateDictEnt_primitive("-", primitive_SUBTRACT, 0);
   forthCreateDictEnt_primitive("/", primitive_DIVIDE, 0);
   forthCreateDictEnt_primitive("MOD", primitive_MOD, 0);
@@ -3427,6 +3429,7 @@ static void forthBootupDict(void)
   forthCreateDictEnt_primitive("C!", primitive_C_STORE, 0);
   forthCreateDictEnt_primitive("C+!", primitive_C_PLUS_STORE, 0);
   forthCreateDictEnt_primitive("C1+!", primitive_C_1_PLUS_STORE, 0);
+  forthCreateDictEnt_primitive("C1-!", primitive_C_1_MINUS_STORE, 0);
   forthCreateDictEnt_primitive("@", primitive_FETCH, 0);
   forthCreateDictEnt_primitive("D@", primitive_D_FETCH, 0);
   forthCreateDictEnt_primitive("F@", primitive_F_FETCH, 0);
@@ -4117,6 +4120,13 @@ static void prim_1_PLUS_STORE(void)
 {
   PSINGLE pSingle = SP_POP_PTR();
   (*pSingle)++;
+}
+
+// 1-!
+static void prim_1_MINUS_STORE(void)
+{
+  PSINGLE pSingle = SP_POP_PTR();
+  (*pSingle)--;
 }
 
 // -
@@ -4813,6 +4823,13 @@ static void prim_C_1_PLUS_STORE(void)
 {
   PBYTE pByte = SP_POP_PTR();
   (*pByte)++;
+}
+
+// C1-!
+static void prim_C_1_MINUS_STORE(void)
+{
+  PBYTE pByte = SP_POP_PTR();
+  (*pByte)--;
 }
 
 // @
@@ -7206,8 +7223,10 @@ static void prim_TIME(void)
 // MICRO-TIME
 static void prim_MICRO_TIME(void)
 {
-  DOUBLE micro_time = external_getmicrotime();
-  SP_PUSH_DOUBLE(micro_time);
+  DOUBLE secs, usecs;
+  external_getmicrotime(&secs, &usecs);
+  SP_PUSH_DOUBLE(secs);
+  SP_PUSH_DOUBLE(usecs);
 }
 
 // SLEEP
@@ -7526,6 +7545,9 @@ static void forth_EXECUTE_PRIMITIVE(primitive_t prim)
   case primitive_1_MINUS:		// 1-
     prim_1_MINUS(); break;
 
+  case primitive_1_MINUS_STORE:		// 1-!
+    prim_1_MINUS_STORE(); break;
+
   case primitive_2_PLUS:		// 2+
     prim_2_PLUS(); break;
 
@@ -7684,6 +7706,9 @@ static void forth_EXECUTE_PRIMITIVE(primitive_t prim)
 
   case primitive_C_1_PLUS_STORE:// C1+!
     prim_C_1_PLUS_STORE(); break;
+
+  case primitive_C_1_MINUS_STORE:// C1-!
+    prim_C_1_MINUS_STORE(); break;
 
   case primitive_C_LIT:			// CLIT
     prim_C_LIT(); break;
@@ -8627,6 +8652,7 @@ static void forth_TRACE_EXECUTE_DICTENT(const PFORTHDICTENT pDE, bool prePost)
   // and call TRACE_EXECUTE
   SP_PUSH_PTR(pDE);
   SP_PUSH(prePost);
+  // set trace_suspend while calling TRACE_EXECUTE so that it does not trace itself/what it calls
   g_pTRACE_VARS->trace_suspend = TRUE;
   vect_TRACE_EXECUTE();
   g_pTRACE_VARS->trace_suspend = FALSE;

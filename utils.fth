@@ -37,6 +37,14 @@ FORTH DEFINITIONS
     DROP HERE SWAP R> CMOVE
   ;
 
+: MICRO-TIME-DIFF	( mtsecsd1\mtusecsd1\mtsecsd2\mtusecsd2 ... usecsd )
+    \ calculate difference (as DOUBLE micro-seconds) between 2 MICRO-TIMEs
+    \ note that for convenience this does mt2 - mt1, i.e. expecting mt2 > mt1
+    D>R 2SWAP D>R		( mtsecsd1\mtsecsd2 )
+    2SWAP D- 1000000. D*	( [mtsecsd2 - mtsecsd1] * 1000000. )
+    R>D D- R>D D+		( ... usecsd )
+  ;
+
 \
 \ 1ARRAY stuff
 \
@@ -65,24 +73,51 @@ FORTH DEFINITIONS
 : 1ARRAY-SIZE	( addr ... size )
     2- @
   ;
+
 : 1ARRAY-BUBBLE-SORT		( array\cmp ... )
-    (LOCAL) cmp (LOCAL) array	( array\cmp ... )
-    0 (LOCAL) swapped
-    0 array @EXECUTE 1ARRAY-SIZE (LOCAL) size
+    \ See https://en.wikipedia.org/wiki/Bubble_sort
+    (LOCAL) cmp (LOCAL) array
+    \ MICRO-TIME ." 1ARRAY-BUBBLE-SORT: "
+    0 array @EXECUTE DUP 1ARRAY-COUNT (LOCAL) _count 1ARRAY-SIZE (LOCAL) size
+    0 (LOCAL) newcount
     BEGIN
-      0 swapped !
-      0 array @EXECUTE 1ARRAY-COUNT 1-	( ... count-1 )
-      0 DO
-        I array @EXECUTE DUP size @ +
-        2DUP cmp @EXECUTE 0> IF		( array[I] > array[I + 1] )
-          size @ MEMSWAP		( array[I] <-> array[I + 1] )
-          1 swapped !
+      0 newcount !			( newcount = 0 )
+      _count @ 1 DO			( for I = 1 to _count - 1 )
+        I array @EXECUTE DUP size @ -	( &array[I]\&array[I - 1] )
+        2DUP cmp @EXECUTE 0< IF		( array[I] < array[I - 1] )
+          size @ MEMSWAP		( array[I] <-> array[I - 1] )
+          I newcount !			( newcount = I )
         ELSE
           2DROP
         THEN
       LOOP
-    swapped @ NOT UNTIL	( ... )
-  ;
+      newcount @ DUP _count !		( count = newcount )
+    2 < UNTIL				( count <= 1 )
+    \ MICRO-TIME MICRO-TIME-DIFF 1000. D/ D. ." milliseconds" CR
+;
+
+: 1ARRAY-SELECTION-SORT		( array\cmp ... )
+    \ See https://en.wikipedia.org/wiki/Selection_sort
+    (LOCAL) cmp (LOCAL) array
+    \ MICRO-TIME ." 1ARRAY-SELECTION-SORT: "
+    0 array @EXECUTE DUP 1ARRAY-COUNT (LOCAL) _count 1ARRAY-SIZE (LOCAL) size
+    0 (LOCAL) minI
+    _count @ 1- 0 DO			( for outer = 0 to _count - 2 )
+      I minI !				( minI = outer )
+      _count @ I 1+ DO			( for inner = outer + 1 to _count - 1 )
+        I array @EXECUTE minI @ array @EXECUTE	( &array[inner]\&array[minI] )
+        cmp @EXECUTE 0< IF		( array[inner] < array[minI] )
+          I minI !			( minI = inner )
+        THEN
+      LOOP
+      minI @ I = NOT IF			( minI != outer )
+        I array @EXECUTE minI @ array @EXECUTE	( &array[outer]\&array[minI] )
+        size @ MEMSWAP			( array[outer] <-> array[minI] )
+      THEN
+    LOOP
+    \ MICRO-TIME MICRO-TIME-DIFF 1000. D/ D. ." milliseconds" CR
+;
+
 : 1ARRAY-BINARY-SEARCH	( array\cmp\val ... &array[n]/0 )
     (LOCAL) val (LOCAL) cmp (LOCAL) array	( array\cmp\val ... )
     0 0 array @EXECUTE 1ARRAY-COUNT 1-	( 0\count-1 )
@@ -103,14 +138,14 @@ FORTH DEFINITIONS
       THEN
     REPEAT				( low\high )
     2DROP 0				( 0 )
-  ;
+;
 
 \
 \ VLIST with output sorted alphabetically
 \
 : IS-BLANK-DICT-ID	( addr ... f )
     \ is the dictionary id/name at addr a "dummy, blank" one (first word in a Vocabulary)
-    COUNT 0x1F AND 1 = SWAP C@ 32 = AND
+    COUNT 0x1F AND 1 = SWAP C@ BL = AND
   ;
 : VLIST-SORTED	( ... )
     " " (LOCAL) lastdone 0 (LOCAL) nextfound 0 (LOCAL) found
@@ -119,7 +154,7 @@ FORTH DEFINITIONS
       LAST
       BEGIN
       ?DUP WHILE
-        DUP COUNT 0x1F AND 1 = SWAP C@ 32 = AND NOT IF
+        DUP IS-BLANK-DICT-ID NOT IF
           DUP lastdone @ $CMPID 0>
           OVER nextfound @ $CMPID 0<
           AND IF DUP nextfound ! 1 found ! THEN
@@ -128,6 +163,20 @@ FORTH DEFINITIONS
       REPEAT
       found @ IF nextfound @ DUP lastdone ! ID. THEN
     found @ WHILE
+    REPEAT
+    CR
+  ;
+\
+\ VLIST to show IMMEDIATE words
+\
+: VLIST-IMMEDIATES	( ... )
+    LAST
+    BEGIN
+    ?DUP WHILE
+      DUP IS-BLANK-DICT-ID NOT IF
+        DUP COUNT SWAP DROP 0x40 AND IF DUP ID. THEN
+      THEN
+      (FINDPREV)
     REPEAT
     CR
   ;

@@ -113,11 +113,12 @@ extern int32_t external_time(void)
   return time(NULL);
 }
 
-extern int32_t external_getmicrotime(void)
+extern void external_getmicrotime(int32_t *secs, int32_t *usecs)
 {
   struct timeval tv;
   gettimeofday(&tv, NULL);
-  return tv.tv_usec;
+  *secs = tv.tv_sec;
+  *usecs = tv.tv_usec;
 }
 
 extern unsigned int external_sleep(unsigned int seconds)
@@ -223,13 +224,31 @@ extern void *readline_realloc (void *__ptr, size_t __size)
 static void readline_prep_terminal(bool prep)
 {
   static bool preped = FALSE;
-  fflush(stdin);
   fflush(stdout);
+  fflush(stderr);
   if (prep && !preped)
     rl_prep_terminal(1);
   else if (!prep && preped)
     rl_deprep_terminal();
   preped = prep;
+}
+
+static void readline_flush_stdin()
+{
+  // flush any pending characters in stdin
+  // this is necessary from readline_terminal_column() in case the user has typed ahead
+  fd_set rfds;
+  struct timeval tv;
+
+  FD_ZERO(&rfds);
+  FD_SET(fileno(stdin), &rfds);
+  tv.tv_sec = tv.tv_usec = 0;
+  int retval = select(1, &rfds, NULL, NULL, &tv);
+  if (retval)
+  {
+    char buf[100];
+    read(fileno(stdin), buf, sizeof(buf));
+  }
 }
 
 static int readline_terminal_column(void)
@@ -239,6 +258,7 @@ static int readline_terminal_column(void)
   if (!isatty(fileno(stdin)) || !isatty(fileno(stdout)))
     return -1;
   readline_prep_terminal(TRUE);			// put terminal into "raw" mode (immediate input, no echo)
+  readline_flush_stdin();			// flush any type-ahead, which would stop this working
   fputs("\033[6n", stdout);			// ANSI escape sequence <ESC>[6n to query cursor position
   int row = -1, col = -1;
   int UNUSED(count) = fscanf(stdin, "\033[%d;%dR", &row, &col);	// ANSI escape sequence response <ESC>[<row>;<col>R

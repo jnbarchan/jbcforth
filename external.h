@@ -44,7 +44,7 @@ extern int32_t external_getpid(void);
 extern int32_t external_fork(void);
 extern int external_system(const char *__command);
 extern int32_t external_time(void);
-extern int32_t external_getmicrotime(void);
+extern void external_getmicrotime(int32_t *secs, int32_t *usecs);
 unsigned int external_sleep(unsigned int seconds);
 
 #ifdef	SEMAPHORE
