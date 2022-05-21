@@ -43,6 +43,28 @@ FORTH tests DEFINITIONS
 0 4 1ARRAY TC-ARRAY
 INIT-TC-ARRAY
 
+0 TC-ARRAY 1ARRAY-COUNT 2 1ARRAY TC-PRIMITIVES-ARRAY
+: INIT-TC-PRIMITIVES-ARRAY		( ... )
+    \ The array for looking up a word which is a primitive
+    \ each element is the address in TC-ARRAY for the primitive
+    \ whose primitive number ( enum primitive ) is the index into TC-PRIMITIVES-ARRAY
+    0 TC-PRIMITIVES-ARRAY 1ARRAY-ERASE
+    0 TC-ARRAY 1ARRAY-COUNT 0 DO		( for I = 0 to TC-ARRAY-COUNT - 1 )
+      I TC-ARRAY @ ?DUP IF			( if TC-ARRAY[I][0] 'i.e. dictionary word addr' != 0 )
+        PFA DUP CFA @ 0= IF			( if dict word's cfe == 0 => it's a primitive, prim_num in PFA[0] )
+          @ DUP 0 TC-PRIMITIVES-ARRAY 1ARRAY-IN-RANGE IF
+            I TC-ARRAY SWAP TC-PRIMITIVES-ARRAY !	( TC-PRIMITIVES-ARRAY[prim_num] = &TC-ARRAY[I] )
+          ELSE
+            DROP				( drop prim_num )
+          THEN
+        ELSE
+          DROP					( drop PFA )
+        THEN
+      THEN
+    LOOP
+  ;
+INIT-TC-PRIMITIVES-ARRAY
+
 : TC-SHOW		( f ... )
     \ Show the words in TC-ARRAY
     \ f=0 => show words where the count = 0
@@ -62,6 +84,21 @@ INIT-TC-ARRAY
         ?DUP IF SWAP ID. ." : " 1 .R ." , " ELSE DROP THEN
       THEN
     LOOP
+  ;
+
+: TC-ARRAY-FIND-VIA-PRIMS-ARRAY	( xt ... &TC-ARRAY[n]/0 )
+    \ Find a word [xt] in TC-ARRAY
+    \ Return the address of the element
+    \ 0 => not found
+    DUP 0 +ORIGIN < OVER FENCE @ > OR IF DROP 0 EXIT THEN	( if xt not in nucleus dictionary range return 0 )
+    DUP PFA CFA @			( if dict word's cfe == 0 => it's a primitive, prim_num in PFA[0] )
+    IF DROP 0 EXIT THEN			( dict word's cfe != 0 => not a primitive )
+    DUP PFA @				( xt\xt.pfa[0] )
+    DUP 0 TC-PRIMITIVES-ARRAY 1ARRAY-IN-RANGE	( prim_num in TC-PRIMITIVES-ARRAY range )
+    NOT IF 2DROP 0 EXIT THEN		( dict word's cfe != 0 => not a primitive )
+    TC-PRIMITIVES-ARRAY @		( TC-PRIMITIVES-ARRAY[prim_num] => addr in TC-ARRAY )
+    SWAP OVER @				( &TC-ARRAY[n]\xt\TC-ARRAY[n] )
+    = ASSERT				( verify TC-ARRAY[n] PFA == xt sought )
   ;
 
 : TC-ARRAY-FIND-SEQUENTIAL	( xt ... &array[n]/0 )
@@ -90,8 +127,17 @@ INIT-TC-ARRAY
     \ Find a word [xt] in TC-ARRAY
     \ Return the address of the element
     \ 0 => not found
-    ' TC-ARRAY NFA ' TC-ARRAY-CMP NFA ROT	( array\cmp\val )
+    ' TC-ARRAY NFA ' TC-ARRAY-CMP NFA ROT	( array\cmp\xt )
     1ARRAY-BINARY-SEARCH			( &array[n]/0 )
+  ;
+
+: TC-ARRAY-FIND-FAST	( xt ... &array[n]/0 )
+    \ Find a word [xt] in TC-ARRAY
+    \ Return the address of the element
+    \ 0 => not found
+    DUP TC-ARRAY-FIND-VIA-PRIMS-ARRAY	( try to find fast if it is a primitive )
+    ?DUP IF SWAP DROP EXIT THEN		( found fast as primitive )
+    TC-ARRAY-FIND-BINARY		( have to find via binary search )
   ;
 
 : TC-EXECUTE		( xt\f ... )
@@ -101,8 +147,7 @@ INIT-TC-ARRAY
     \ f=0 => pre-execution of word
     \ f=1 => post-execution of word
     IF DROP EXIT THEN			( do nothing if flag is "post-execute" )
-    \ TC-ARRAY-FIND-SEQUENTIAL		( find the execution token in TC-ARRAY )
-    TC-ARRAY-FIND-BINARY		( find the execution token in TC-ARRAY )
+    TC-ARRAY-FIND-FAST			( find the execution token in TC-ARRAY )
     ?DUP IF 2+ 1+! THEN			( increment number of times called )
   ;
 
@@ -461,7 +506,9 @@ T{ : temp1 " Hello" " Hello" ; ( -> ) temp1 6 MEMCMP 0= ASSERT temp1 >R COUNT DR
 T{ : temp1 " HelloX" " HelloYY" ; ( -> ) temp1 >R COUNT DROP R> COUNT DROP 5 MEMCMP 0= ASSERT }T FORGET temp1
 T{ : temp1 " HelloX" " HelloYY" ; ( -> ) temp1 >R COUNT DROP R> COUNT DROP 6 MEMCMP 0= NOT ASSERT }T FORGET temp1
 T{ : temp1 " Hello world   " ; ( -> ) temp1 COUNT DUP 14 = ASSERT -TRAILING 11 = ASSERT DROP }T FORGET temp1
+." Expect a message on next line..." CR
 T{ : temp1 " Hello world" ; ( -> ) temp1 COUNT TYPE CR }T FORGET temp1
+." Expect a message on next line..." CR
 T{ : temp1 ." Hello world" ; ( -> ) temp1 CR }T FORGET temp1
 \ T{ : temp1 [COMPILE] (.") [ BL (WORD) Hello TEXT ] ; ( -> ) temp1 CR }T FORGET temp1
 T{ " Hello" COUNT $CONSTANT temp1 ( -> ) " Hello" COUNT DROP temp1 COUNT MEMCMP 0= ASSERT }T FORGET temp1
@@ -569,6 +616,7 @@ T{ OS-PID ( -> ) 0. D= NOT ASSERT }T
 \
 T{ ?LOAD" non-existent.fth" ( -> ) NOT ASSERT }T
 T{ ?LOAD" non-existent.fth" ( -> ) NOT ASSERT OSERRNO 2 = ASSERT }T
+." Expect a message on next line..." CR
 T{ ?LOAD" non-existent.fth" ( -> ) NOT ASSERT 1 ERR-WARN ! OSERROR 0 ERR-WARN ! }T
 T{ ?LOAD" empty.fth" ( -> ) ASSERT }T
 T{ : temp1 ?LOAD" empty.fth" ; ( -> ) temp1 ASSERT }T FORGET temp1
@@ -656,6 +704,10 @@ T{ 0 SLEEP ( -> ) }T
 \ Test 1ARRAY stuff
 \
 T{ 50 2 1ARRAY temp1 ( -> ) 0 temp1 1ARRAY-COUNT 50 = ASSERT 0 temp1 1ARRAY-SIZE 2 = ASSERT }T FORGET temp1
+T{ 50 2 1ARRAY temp1 ( -> )
+0 0 temp1 1ARRAY-IN-RANGE ASSERT 50 1- 0 temp1 1ARRAY-IN-RANGE ASSERT
+-1 0 temp1 1ARRAY-IN-RANGE NOT ASSERT 50 0 temp1 1ARRAY-IN-RANGE NOT ASSERT
+}T FORGET temp1
 T{
 50 2 1ARRAY temp1
 :INLINE 50 0 DO I 100 + I temp1 ! LOOP ;INLINE
@@ -663,6 +715,8 @@ T{
 : temp2 @ - ;
 ' temp1 NFA ' temp2 NFA 500 1ARRAY-BINARY-SEARCH ( -> ) 0= ASSERT
 ' temp1 NFA ' temp2 NFA 123 1ARRAY-BINARY-SEARCH ( -> ) 23 temp1 = ASSERT
+0 temp1 1ARRAY-ERASE
+:INLINE 50 0 DO I temp1 @ 0= ASSERT LOOP ;INLINE
 }T FORGET temp2 FORGET temp1
 T{
 26 1 1ARRAY temp1

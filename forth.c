@@ -3651,7 +3651,7 @@ static void forthBootupDict(void)
   // ---------- Miscellaneous definitions
 
   // Now set FENCE to Top of Dictionary => not allowed to FORGET anything below HERE
-  *user_var_FENCE = PTR_TO_ADDR(pLAST);
+  *user_var_FENCE = PTR_TO_ADDR(pDP);
 }
 
 // ******************************************

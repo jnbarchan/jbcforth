@@ -247,7 +247,7 @@ static void readline_flush_stdin()
   if (retval)
   {
     char buf[100];
-    read(fileno(stdin), buf, sizeof(buf));
+    int UNUSED(count) = read(fileno(stdin), buf, sizeof(buf));
   }
 }
 
@@ -333,7 +333,7 @@ extern void readline_output_color(FILE *output, byte colour)
 {
   if (!isatty(fileno(output)))
     return;
-  fprintf(output, "\033[3%hum", colour);
+  fprintf(output, "\033[3%um", colour);
 }
 
 extern void readline_output_color_white(FILE *output)

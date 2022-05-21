@@ -67,11 +67,18 @@ FORTH DEFINITIONS
       OVER 2+ @				( addr\index\size )
       * + 4 +				( addr + 4 + index * size )
   ;
-: 1ARRAY-COUNT	( addr ... count )
+: 1ARRAY-COUNT	( &array[0] ... count )
     4 - @
   ;
-: 1ARRAY-SIZE	( addr ... size )
+: 1ARRAY-SIZE	( &array[0] ... size )
     2- @
+  ;
+: 1ARRAY-ERASE	( &array[0] ... )
+    DUP 1ARRAY-COUNT OVER 1ARRAY-SIZE * ERASE
+  ;
+: 1ARRAY-IN-RANGE	( index\&array[0] ... f )
+    OVER 0< NOT >R
+    1ARRAY-COUNT < R> AND
   ;
 
 : 1ARRAY-BUBBLE-SORT		( array\cmp ... )
