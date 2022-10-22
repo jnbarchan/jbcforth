@@ -1605,7 +1605,7 @@ static PFORTHDICTENT forthFindDictEntFrom(PFORTHDICTENT pDE, const char *pDictNa
 }
 
 // find the FORTHDICTENT with NFA.name = pDictName
-static PFORTHDICTENT forthFindDictEnt(const FORTHDICTNAME pDictName)
+static PFORTHDICTENT forthFindDictEnt(const PFORTHDICTNAME pDictName)
 {
   // current top-most Dictionary Entry for Compiler Searches
   PFORTHDICTENT pDE = forthStartSearchDictEnt();
@@ -1624,7 +1624,7 @@ static PFORTHDICTENT forthMustFindDictEntForWord(PFORTHSTRING pWord)
 }
 
 // return whether a FORTHDICTNAME is the dummy "blank" entry (first word in a Vocabulary)
-static bool forthDictEntIsBlankName(const FORTHDICTNAME pDictName)
+static bool forthDictEntIsBlankName(const PFORTHDICTNAME pDictName)
 {
   return (pDictName[0] == ' ' && pDictName[1] == '\0');
 }
@@ -1970,7 +1970,7 @@ static void forthDictStoreForthMaxLenString(byte maxlen, byte len, const char *p
 }
 
 // create new FORTHDICTENT at pDP
-static void forthCreateDictEnt(const FORTHDICTNAME pDictName, CFE cfe)
+static void forthCreateDictEnt(const PFORTHDICTNAME pDictName, CFE cfe)
 {
   // set CONTEXT = CURRENT as soon as a new definition is made
   *user_var_CONTEXT = *user_var_CURRENT;
@@ -2038,7 +2038,7 @@ static void forthCreateDictEnt(const FORTHDICTNAME pDictName, CFE cfe)
 }
 
 // create new FORTHDICTENT cfe_primitive
-static void forthCreateDictEnt_primitive(const FORTHDICTNAME pDictName, primitive_t prim, int flag)
+static void forthCreateDictEnt_primitive(const PFORTHDICTNAME pDictName, primitive_t prim, int flag)
 {
   // create new Dictionary Entry, move pDP up to end
   forthCreateDictEnt(pDictName, cfe_primitive);
@@ -2056,7 +2056,7 @@ static void forthCreateDictEnt_primitive(const FORTHDICTNAME pDictName, primitiv
 }
 
 // create new FORTHDICTENT cfe_create
-static void forthCreateDictEnt_create(const FORTHDICTNAME pDictName)
+static void forthCreateDictEnt_create(const PFORTHDICTNAME pDictName)
 {
   // create new Dictionary Entry, move pDP up to end
   forthCreateDictEnt(pDictName, cfe_create);
@@ -2066,7 +2066,7 @@ static void forthCreateDictEnt_create(const FORTHDICTNAME pDictName)
 }
 
 // create new FORTHDICTENT cfe_constant
-static void forthCreateDictEnt_constant(const FORTHDICTNAME pDictName, SINGLE value)
+static void forthCreateDictEnt_constant(const PFORTHDICTNAME pDictName, SINGLE value)
 {
   // create new Dictionary Entry, move pDP up to end
   forthCreateDictEnt(pDictName, cfe_constant);
@@ -2079,7 +2079,7 @@ static void forthCreateDictEnt_constant(const FORTHDICTNAME pDictName, SINGLE va
 }
 
 // create new FORTHDICTENT cfe_double_constant
-static void forthCreateDictEnt_double_constant(const FORTHDICTNAME pDictName, DOUBLE value)
+static void forthCreateDictEnt_double_constant(const PFORTHDICTNAME pDictName, DOUBLE value)
 {
   // create new Dictionary Entry, move pDP up to end
   forthCreateDictEnt(pDictName, cfe_double_constant);
@@ -2092,7 +2092,7 @@ static void forthCreateDictEnt_double_constant(const FORTHDICTNAME pDictName, DO
 }
 
 // create new FORTHDICTENT cfe_float_constant
-static void forthCreateDictEnt_float_constant(const FORTHDICTNAME pDictName, FLOAT value)
+static void forthCreateDictEnt_float_constant(const PFORTHDICTNAME pDictName, FLOAT value)
 {
   // create new Dictionary Entry, move pDP up to end
   forthCreateDictEnt(pDictName, cfe_float_constant);
@@ -2105,7 +2105,7 @@ static void forthCreateDictEnt_float_constant(const FORTHDICTNAME pDictName, FLO
 }
 
 // create new FORTHDICTENT cfe_string_constant
-static void forthCreateDictEnt_string_constant(const FORTHDICTNAME pDictName, byte len, const char *pChars)
+static void forthCreateDictEnt_string_constant(const PFORTHDICTNAME pDictName, byte len, const char *pChars)
 {
   // create new Dictionary Entry, move pDP up to end
   forthCreateDictEnt(pDictName, cfe_string_constant);
@@ -2118,7 +2118,7 @@ static void forthCreateDictEnt_string_constant(const FORTHDICTNAME pDictName, by
 }
 
 // create new FORTHDICTENT cfe_variable
-static void forthCreateDictEnt_variable(const FORTHDICTNAME pDictName, SINGLE value)
+static void forthCreateDictEnt_variable(const PFORTHDICTNAME pDictName, SINGLE value)
 {
   // create new Dictionary Entry, move pDP up to end
   forthCreateDictEnt(pDictName, cfe_variable);
@@ -2131,7 +2131,7 @@ static void forthCreateDictEnt_variable(const FORTHDICTNAME pDictName, SINGLE va
 }
 
 // create new FORTHDICTENT cfe_double_variable
-static void forthCreateDictEnt_double_variable(const FORTHDICTNAME pDictName, DOUBLE value)
+static void forthCreateDictEnt_double_variable(const PFORTHDICTNAME pDictName, DOUBLE value)
 {
   // create new Dictionary Entry, move pDP up to end
   forthCreateDictEnt(pDictName, cfe_double_variable);
@@ -2144,7 +2144,7 @@ static void forthCreateDictEnt_double_variable(const FORTHDICTNAME pDictName, DO
 }
 
 // create new FORTHDICTENT cfe_float_variable
-static void forthCreateDictEnt_float_variable(const FORTHDICTNAME pDictName, FLOAT value)
+static void forthCreateDictEnt_float_variable(const PFORTHDICTNAME pDictName, FLOAT value)
 {
   // create new Dictionary Entry, move pDP up to end
   forthCreateDictEnt(pDictName, cfe_float_variable);
@@ -2157,7 +2157,7 @@ static void forthCreateDictEnt_float_variable(const FORTHDICTNAME pDictName, FLO
 }
 
 // create new FORTHDICTENT cfe_string_variable
-static void forthCreateDictEnt_string_variable(const FORTHDICTNAME pDictName, byte maxlen, byte len, const char *pChars)
+static void forthCreateDictEnt_string_variable(const PFORTHDICTNAME pDictName, byte maxlen, byte len, const char *pChars)
 {
   // create new Dictionary Entry, move pDP up to end
   forthCreateDictEnt(pDictName, cfe_string_variable);
@@ -2170,7 +2170,7 @@ static void forthCreateDictEnt_string_variable(const FORTHDICTNAME pDictName, by
 }
 
 // create new FORTHDICTENT cfe_user_variable
-static void forthCreateDictEnt_user_variable(const FORTHDICTNAME pDictName, byte offset)
+static void forthCreateDictEnt_user_variable(const PFORTHDICTNAME pDictName, byte offset)
 {
   // create new Dictionary Entry, move pDP up to end
   forthCreateDictEnt(pDictName, cfe_user_variable);
@@ -2183,7 +2183,7 @@ static void forthCreateDictEnt_user_variable(const FORTHDICTNAME pDictName, byte
 }
 
 // create new FORTHDICTENT cfe_local_variable
-static void forthCreateDictEnt_local_variable(const FORTHDICTNAME pDictName)
+static void forthCreateDictEnt_local_variable(const PFORTHDICTNAME pDictName)
 {
   // Compilation mode only
   if (!COMPILATION_MODE())
@@ -2256,7 +2256,7 @@ static void forthCreateDictEnt_local_variable(const FORTHDICTNAME pDictName)
 }
 
 // create new FORTHDICTENT cfe_colon
-static void forthCreateDictEnt_colon(const FORTHDICTNAME pDictName)
+static void forthCreateDictEnt_colon(const PFORTHDICTNAME pDictName)
 {
   // create new Dictionary Entry, move pDP up to end
   forthCreateDictEnt(pDictName, cfe_colon);
@@ -2316,7 +2316,7 @@ static void forthMakeDictEntNewVocab(void)
 }
 
 // create new FORTHDICTENT for an EXVEC: to do a primitive
-static void forthCreateDictEnt_execvec(const FORTHDICTNAME pDictName, primitive_t prim)
+static void forthCreateDictEnt_execvec(const PFORTHDICTNAME pDictName, primitive_t prim)
 {
   // create new Dictionary Entry, move pDP up to end
   forthCreateDictEnt(pDictName, cfe_exvec);
@@ -2329,7 +2329,7 @@ static void forthCreateDictEnt_execvec(const FORTHDICTNAME pDictName, primitive_
 }
 
 // initialise a FORTHDICTENT for an EXVEC: to do a primitive
-static void forth_INITVEC(const FORTHDICTNAME pDictName, primitive_t prim)
+static void forth_INITVEC(const PFORTHDICTNAME pDictName, primitive_t prim)
 {
   // find Dictionary Entry to ASSIGN
   PFORTHDICTENT pDEAssign = forthFindDictEnt(pDictName);
@@ -3251,6 +3251,7 @@ static void forthBootupDict(void)
   func = (VOIDFUNC)forthCreateDictEnt_double_variable;
   func = (VOIDFUNC)forthCreateDictEnt_float_variable;
   func = (VOIDFUNC)forthCreateDictEnt_string_variable;
+  VOIDFUNC UNUSED(func2) = func;
   // ---------- Constant definitions
 
   // ++++++++++ User Variables
@@ -9318,7 +9319,11 @@ static void forthSIGINT_HANDLER(int signum)
   // restore signal handler to default
   signal(signum, SIG_DFL);
   // and allow it to be generated again
-  sigrelse(signum);
+//  sigrelse(signum);
+  sigset_t sigset;
+  sigemptyset(&sigset);
+  sigaddset(&sigset, signum);
+  sigprocmask(SIG_UNBLOCK, &sigset, NULL);
 
   // raise Interrupt error
   forth_ERROR(err_INTERRUPT);

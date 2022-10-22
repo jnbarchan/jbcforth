@@ -203,6 +203,9 @@ extern void initialise_readline(void)
   if (!isInitialised)
   {
     isInitialised = TRUE;
+    /* Initialize or re-initialize Readline’s internal state. It’s not strictly necessary to call this; readline() calls it before reading any input. */
+    /* Above is from docs, but we call rl_prep_terminal() early and find it crashes without this */
+    rl_initialize();
     /* Tell the completer that we want to do completion. */
     rl_attempted_completion_function = readline_forth_word_completion;
     rl_basic_word_break_characters = " \t\n";
