@@ -605,8 +605,8 @@ T{
 \
 \ Test OS stuff
 \
-T{ : temp1 " ls >/dev/null" COUNT 2DUP + 0 SWAP C! DROP OSCLI ; ( -> ) temp1 }T FORGET temp1
-T{ : temp1 [ " ls  >/dev/null" COUNT 2DUP + 0 SWAP C! ] >CLI ; ( -> ) temp1 }T FORGET temp1
+T{ : temp1 " ls >/dev/null" DUP COUNT + C@ 0= ASSERT 1+ OSCLI ; ( -> ) temp1 }T FORGET temp1
+T{ : temp1 [ " ls  >/dev/null" COUNT 2DUP + C@ 0= ASSERT ] >CLI ; ( -> ) temp1 }T FORGET temp1
 T{ OS' ls >/dev/null' }T
 T{ : temp1 OS' ls >/dev/null ' ; ( -> ) temp1 }T FORGET temp1
 T{ OS-PID ( -> ) 0. D= NOT ASSERT }T

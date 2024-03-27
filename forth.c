@@ -5002,6 +5002,8 @@ static void prim_QUOTE(void)
     const char *pChars = SP_POP_PTR();
     pPAD->len = len;
     memcpy(pPAD->chars, pChars, len);
+    // '\0' terminate string
+    pPAD->chars[len] = '\0';
     // and leave addr
     SP_PUSH_PTR(pPAD);
   }
@@ -5064,6 +5066,7 @@ static void prim_BRACKET_DOLLAR_STORE(void)
   char *pChars = SP_POP_PTR();
   memcpy(pStr->chars, pChars, count);
   pStr->len = count;
+  // '\0' terminate string
   pStr->chars[pStr->len] = '\0';
 }
 
