@@ -82,6 +82,11 @@ extern int external_fflush(FILE *stream)
   return fflush(stream);
 }
 
+extern int external_fseek(FILE *stream, int offset)
+{
+  return fseek(stream, offset, SEEK_SET);
+}
+
 
 extern void external_exit(int __status)
 {

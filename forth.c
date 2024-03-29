@@ -169,7 +169,7 @@ typedef enum primitive
   primitive_DOLLAR_PLUS,	// $+
   primitive_DOLLAR_COMMA,	// $,
   primitive_DOLLAR_CMP,		// $CMP
-  primitive_DOLLAR_CMPID,		// $CMPID
+  primitive_DOLLAR_CMPID,	// $CMPID
   primitive_DOLLAR_CONSTANT,	// $CONSTANT
   primitive_DOLLAR_INTERPRET,	// $INTERPRET
   primitive_DOLLAR_VARIABLE,	// $VARIABLE
@@ -295,6 +295,7 @@ typedef enum primitive
   primitive_CFA,		// CFA
   primitive_C_LIT,		// CLIT
   primitive_C_LITERAL,		// CLITERAL
+  primitive_CLOSE_FILE,		// CLOSE-FILE
   primitive_C_MOVE,		// CMOVE
   primitive_COLD,		// COLD
   primitive_COMPILE,		// COMPILE
@@ -372,6 +373,7 @@ typedef enum primitive
   primitive_FIRST,		// FIRST
   primitive_F_LIT,		// FLIT
   primitive_F_LITERAL,		// FLITERAL
+  primitive_FLUSH_FILE,		// FLUSH-FILE
   primitive_FORGET,		// FORGET
   primitive_FORTH,		// FORTH
   primitive_F_VARIABLE,		// FVARIABLE
@@ -417,6 +419,7 @@ typedef enum primitive
   primitive_NOVEC,		// NOVEC
   vector_NUM,			// NUM
   primitive_NUMBER,		// NUMBER
+  primitive_OPEN_FILE,	// OPEN-FILE
   primitive_OR,			// OR
   primitive_OS_QUOTE,		// OS'
   primitive_OS_FORK,		// OS-FORK
@@ -437,12 +440,14 @@ typedef enum primitive
   primitive_R_FROM_D,		// R>D
   primitive_R_FROM_F,		// R>F
   primitive_R_FETCH,		// R@
+  primitive_READLINE_FILE,	// READLINE-FILE
   primitive_REPEAT,		// REPEAT
   primitive_ROLL,		// ROLL
   primitive_ROT,		// ROT
   primitive_RP_STORE,		// RP!
   primitive_RP_FETCH,		// RP@
   primitive_S_TO_D,		// S->D
+  primitive_SEEK_FILE,		// SEEK-FILE
   primitive_SF_STORE,		// SF!
   primitive_SF_TO_F,		// SF->F
   primitive_SF_COMMA,		// SF,
@@ -494,6 +499,7 @@ typedef enum primitive
   primitive_WDSZ,		// WDSZ
   primitive_WHILE,		// WHILE
   primitive_WORD,		// WORD
+  primitive_WRITELINE_FILE,	// WRITELINE-FILE
   primitive_X_OR,		// XOR
   primitive_LEFT_BRACKET,	// [
   primitive_BRACKET_COMPILE,	// [COMPILE]
@@ -626,6 +632,11 @@ static void
 
 static FILE
   *g_fpOUT		// FPOUT:	Output Stream File Pointer
+  ;
+
+#define MAX_USER_FILES 10
+static FILE
+  *g_fpUSERFILES[MAX_USER_FILES]	// FPUSERFILES:	File Pointers for OPEN-FILE etc.
   ;
 
 static PSINGLE
@@ -1166,6 +1177,97 @@ static void forth_semrelease(void)
 
 // **************************************
 // ********** </LOW-LEVEL I/O> **********
+// **************************************
+
+
+// *************************************
+// ********** <USER-FILE I/O> **********
+// *************************************
+
+static void forth_closeuserfile(int filenum)
+{
+  if (filenum < 0 || filenum >= MAX_USER_FILES)
+    return;
+  if (g_fpUSERFILES[filenum] != NULL)
+  {
+    external_fclose(g_fpUSERFILES[filenum]);
+    g_fpUSERFILES[filenum] = NULL;
+  }
+}
+
+static void forth_closealluserfiles(void)
+{
+  for (int i = 0; i < MAX_USER_FILES; i++)
+    forth_closeuserfile(i);
+}
+
+static int forth_openuserfile(const char *pFName, int modenum)
+{
+  int i;
+  for (i = 0; i < MAX_USER_FILES; i++)
+    if (g_fpUSERFILES[i] == NULL)
+      break;
+  if (i >= MAX_USER_FILES)
+    return -1;
+  const char *mode;
+  switch (modenum)
+  {
+  case 0: mode = "r"; break;
+  case 1: mode = "w"; break;
+  case 2: mode = "a"; break;
+  default: forth_ERROR(err_BAD_PARAM); return -1;
+  }
+  g_fpUSERFILES[i] = external_fopen(pFName, mode);
+  if (g_fpUSERFILES[i] == NULL)
+    return -1;
+  return i;
+}
+
+static char *forth_readlineuserfile(int filenum, char *pChars, int maxlen)
+{
+  if (filenum < 0 || filenum >= MAX_USER_FILES || g_fpUSERFILES[filenum] == NULL)
+  {
+    forth_ERROR(err_BAD_PARAM);
+    return NULL;
+  }
+  return fgets(pChars, maxlen, g_fpUSERFILES[filenum]);
+}
+
+static void forth_writelineuserfile(int filenum, const char *pChars, int len)
+{
+  if (filenum < 0 || filenum >= MAX_USER_FILES || g_fpUSERFILES[filenum] == NULL)
+  {
+    forth_ERROR(err_BAD_PARAM);
+    return;
+  }
+  if (len < 0)
+    len = strlen(pChars);
+  fwrite(pChars, 1, len, g_fpUSERFILES[filenum]);
+  fputc('\n', g_fpUSERFILES[filenum]);
+}
+
+static void forth_flushuserfile(int filenum)
+{
+  if (filenum < 0 || filenum >= MAX_USER_FILES || g_fpUSERFILES[filenum] == NULL)
+  {
+    forth_ERROR(err_BAD_PARAM);
+    return;
+  }
+  external_fflush(g_fpUSERFILES[filenum]);
+}
+
+static void forth_seekuserfile(int filenum, int offset)
+{
+  if (filenum < 0 || filenum >= MAX_USER_FILES || g_fpUSERFILES[filenum] == NULL)
+  {
+    forth_ERROR(err_BAD_PARAM);
+    return;
+  }
+  external_fseek(g_fpUSERFILES[filenum], offset);
+}
+
+// **************************************
+// ********** </USER-FILE I/O> **********
 // **************************************
 
 
@@ -3628,6 +3730,15 @@ static void forthBootupDict(void)
   forthCreateDictEnt_primitive("CASE-SENSITIVE", primitive_CASE_SENSITIVE, 0);
   // ---------- Dictionary definitions
 
+  // ++++++++++ User file definitions
+  forthCreateDictEnt_primitive("OPEN-FILE", primitive_OPEN_FILE, 0);
+  forthCreateDictEnt_primitive("CLOSE-FILE", primitive_CLOSE_FILE, 0);
+  forthCreateDictEnt_primitive("READLINE-FILE", primitive_READLINE_FILE, 0);
+  forthCreateDictEnt_primitive("WRITELINE-FILE", primitive_WRITELINE_FILE, 0);
+  forthCreateDictEnt_primitive("FLUSH-FILE", primitive_FLUSH_FILE, 0);
+  forthCreateDictEnt_primitive("SEEK-FILE", primitive_SEEK_FILE, 0);
+  // ---------- User file definitions
+
   // ++++++++++ Miscellaneous definitions
   forthCreateDictEnt_primitive("INTERPRET", primitive_INTERPRET, 0);
   forthCreateDictEnt_primitive("$INTERPRET", primitive_DOLLAR_INTERPRET, 0);
@@ -4926,7 +5037,9 @@ static void prim_MEMCMP(void)
   USINGLE num = SP_POP();
   PBYTE pMem2 = SP_POP_PTR();
   PBYTE pMem1 = SP_POP_PTR();
-  SP_PUSH(memcmp(pMem1, pMem2, num));
+  int cmp = memcmp(pMem1, pMem2, num);
+  SINGLE cmp2 = (cmp < 0) ? -1 : (cmp > 0) ? 1 : 0;
+  SP_PUSH(cmp2);
 }
 
 // MEMDUMP
@@ -5114,15 +5227,16 @@ static void prim_DOLLAR_CMP(void)
   PFORTHSTRING pStr1 = SP_POP_PTR();
   int len1 = pStr1->len, len2 = pStr2->len;
   byte minlen = (len1 < len2) ? len1 : len2;
-  SINGLE cmp = memcmp(pStr1->chars, pStr2->chars, minlen);
-  if (cmp == 0)
+  int cmp = memcmp(pStr1->chars, pStr2->chars, minlen);
+  SINGLE cmp2 = (cmp < 0) ? -1 : (cmp > 0) ? 1 : 0;
+  if (cmp2 == 0)
   {
     if (len1 > len2)
-      cmp = (unsigned char)pStr1->chars[minlen];
+      cmp2 = 1;
     else if (len2 > len1)
-      cmp = -(unsigned char)pStr2->chars[minlen];
+      cmp2 = -1;
   }
-  SP_PUSH(cmp);
+  SP_PUSH(cmp2);
 }
 
 // $CMPID
@@ -5132,15 +5246,16 @@ static void prim_DOLLAR_CMPID(void)
   PFORTHSTRING pStr1 = SP_POP_PTR();
   int len1 = (pStr1->len & 0x1F), len2 = (pStr2->len & 0x1F);
   byte minlen = (len1 < len2) ? len1 : len2;
-  SINGLE cmp = memcmp(pStr1->chars, pStr2->chars, minlen);
-  if (cmp == 0)
+  int cmp = memcmp(pStr1->chars, pStr2->chars, minlen);
+  SINGLE cmp2 = (cmp < 0) ? -1 : (cmp > 0) ? 1 : 0;
+  if (cmp2 == 0)
   {
     if (len1 > len2)
-      cmp = (unsigned char)pStr1->chars[minlen];
+      cmp2 = 1;
     else if (len2 > len1)
-      cmp = -(unsigned char)pStr2->chars[minlen];
+      cmp2 = -1;
   }
-  SP_PUSH(cmp);
+  SP_PUSH(cmp2);
 }
 
 // ---------- String definitions
@@ -7062,6 +7177,69 @@ static void prim_CASE_SENSITIVE(void)
 
 // ---------- Dictionary definitions
 
+// ++++++++++ User file definitions
+
+// OPEN-FILE
+static void prim_OPEN_FILE(void)
+{
+  SINGLE modenum = SP_POP();
+  PFORTHSTRING pFName = SP_POP_PTR();
+  int filenum = forth_openuserfile(pFName->chars, modenum);
+  SP_PUSH(filenum);
+}
+
+// CLOSE-FILE
+static void prim_CLOSE_FILE(void)
+{
+  SINGLE filenum = SP_POP();
+  forth_closeuserfile(filenum);
+}
+
+// READLINE-FILE
+static void prim_READLINE_FILE(void)
+{
+  SINGLE filenum = SP_POP();
+  BYTE maxlen = SP_POP();
+  PFORTHSTRING pStr = SP_POP_PTR();
+  char *p = forth_readlineuserfile(filenum, pStr->chars, maxlen);
+  if (p == NULL)
+  {
+    SP_PUSH(-1);
+    return;
+  }
+  int len = strlen(pStr->chars);
+  if (len > 0 && pStr->chars[len - 1] == '\n')
+    pStr->chars[--len] = '\0';
+  pStr->len = len;
+  SP_PUSH(len);
+}
+
+// WRITELINE-FILE
+static void prim_WRITELINE_FILE(void)
+{
+  SINGLE filenum = SP_POP();
+  BYTE len = SP_POP();
+  const char *pChars = SP_POP_PTR();
+  forth_writelineuserfile(filenum, pChars, len);
+}
+
+// FLUSH-FILE
+static void prim_FLUSH_FILE(void)
+{
+  SINGLE filenum = SP_POP();
+  forth_flushuserfile(filenum);
+}
+
+// SEEK-FILE
+static void prim_SEEK_FILE(void)
+{
+  SINGLE filenum = SP_POP();
+  DOUBLE offset = SP_POP_DOUBLE();
+  forth_seekuserfile(filenum, offset);
+}
+
+// ---------- User file definitions
+
 // ++++++++++ Miscellaneous definitions
 
 // INTERPRET
@@ -7693,7 +7871,7 @@ static void forth_EXECUTE_PRIMITIVE(primitive_t prim)
   case primitive_C_STORE:		// C!
     prim_C_STORE(); break;
 
-  case primitive_C_PLUS_STORE:	// C+!
+  case primitive_C_PLUS_STORE:		// C+!
     prim_C_PLUS_STORE(); break;
 
   case primitive_C_COMMA:		// C,
@@ -7708,10 +7886,10 @@ static void forth_EXECUTE_PRIMITIVE(primitive_t prim)
   case primitive_C_FETCH:		// C@
     prim_C_FETCH(); break;
 
-  case primitive_C_1_PLUS_STORE:// C1+!
+  case primitive_C_1_PLUS_STORE:	// C1+!
     prim_C_1_PLUS_STORE(); break;
 
-  case primitive_C_1_MINUS_STORE:// C1-!
+  case primitive_C_1_MINUS_STORE:	// C1-!
     prim_C_1_MINUS_STORE(); break;
 
   case primitive_C_LIT:			// CLIT
@@ -7731,6 +7909,9 @@ static void forth_EXECUTE_PRIMITIVE(primitive_t prim)
 
   case primitive_CFA:			// CFA
     prim_CFA(); break;
+
+  case primitive_CLOSE_FILE:		// CLOSE-FILE
+    prim_CLOSE_FILE(); break;
 
   case primitive_COLD:			// COLD
     prim_COLD(); break;
@@ -7960,6 +8141,9 @@ static void forth_EXECUTE_PRIMITIVE(primitive_t prim)
   case primitive_F_LITERAL:		// FLITERAL
     prim_F_LITERAL(); break;
 
+  case primitive_FLUSH_FILE:		// FLUSH-FILE
+    prim_FLUSH_FILE(); break;
+
   case primitive_FORGET:		// FORGET
     prim_FORGET(); break;
 
@@ -8095,6 +8279,9 @@ static void forth_EXECUTE_PRIMITIVE(primitive_t prim)
   case primitive_NUMBER:		// NUMBER
     prim_NUMBER(); break;
 
+  case primitive_OPEN_FILE:		// OPEN-FILE
+    prim_OPEN_FILE(); break;
+
   case primitive_OR:			// OR
     prim_OR(); break;
 
@@ -8155,6 +8342,9 @@ static void forth_EXECUTE_PRIMITIVE(primitive_t prim)
   case primitive_R_FETCH:		// R@
     prim_R_FETCH(); break;
 
+  case primitive_READLINE_FILE:		// READLINE-FILE
+    prim_READLINE_FILE(); break;
+
   case primitive_REPEAT:		// REPEAT
     prim_REPEAT(); break;
 
@@ -8175,6 +8365,9 @@ static void forth_EXECUTE_PRIMITIVE(primitive_t prim)
 
   case primitive_SF_STORE:		// SF!
     prim_SF_STORE(); break;
+
+  case primitive_SEEK_FILE:		// SEEK-FILE
+    prim_SEEK_FILE(); break;
 
   case primitive_SF_TO_F:		// SF->F
     prim_SF_TO_F(); break;
@@ -8325,6 +8518,9 @@ static void forth_EXECUTE_PRIMITIVE(primitive_t prim)
 
   case primitive_WORD:			// WORD
     prim_WORD(); break;
+
+  case primitive_WRITELINE_FILE:	// WRITELINE-FILE
+    prim_WRITELINE_FILE(); break;
 
   case primitive_X_OR:			// XOR
     prim_X_OR(); break;
@@ -9291,6 +9487,9 @@ static void forth_BRACKET_COLD(void)
   // set Input Stream to stdin
   forth_FILE_IN_STDIN();
 
+  // close any open user files
+  forth_closealluserfiles();
+
   // clear any tracing
   memset(g_pTRACE_VARS, 0, sizeof(TRACEVARS));
 
@@ -9399,6 +9598,9 @@ static void forthMAIN(void)
   // close any open file Output Stream
   forthSetConsoleOutput();
 
+  // close any open user files
+  forth_closealluserfiles();
+
   fprintf(stdout, "BYE\n");
 }
 
@@ -9418,6 +9620,8 @@ int main(int UNUSED(argc), char* UNUSED(argv[]))
   g_bExitOnError = TRUE;
 
   g_fpOUT = stdout;
+
+  memset(g_fpUSERFILES, 0, sizeof(g_fpUSERFILES));
 
 #ifdef	SEMAPHORE
   // initialise the global semaphore

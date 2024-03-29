@@ -37,6 +37,7 @@ extern int external_fileno(FILE *stream);
 extern FILE *external_fopen(const char *path, const char *mode);
 extern int external_fclose(FILE *fp);
 extern int external_fflush(FILE *stream);
+extern int external_fseek(FILE *stream, int offset);
 
 extern void external_exit (int __status) __THROW __attribute__ ((__noreturn__));
 extern int external_isatty(int __fd);
